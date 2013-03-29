@@ -5,9 +5,10 @@
 # * DONE Store data reliably
 # * Export data for post-processing
 # * DONE Define tree of keys
-# * DONE Each leaf stores data, each datum has a number of fields
-# * SEMI-DONE Define data-types for fields
-# * Data types to include range, choice, text, timestamp
+# * DONE Each leaf stores entries, each entry has a number of fields
+# * SEMI-DONE Define datatypes for fields
+# * Datatypes to include int, range, choice (plus subchoices?), text, timestamp
+#   Timestamp (minute): now, yesterday, ... !! check this is DST-safe !!
 #   NOT MY PROBLEM Navigate by single keystrokes
 # * Change descriptions and add  / delete fields, on the fly
 #   Hidden fields (for redundant information)
@@ -26,29 +27,42 @@
 
 # Interface:
 #
+# 1. Constructors
+#
 # new_root(key = 'Everything') makes a new root. Key is a string.
 #
-# self.branch(key) makes a new branch. Self is a branch (or root)
-# which does not have any leaf children; key is a string (not already
-# in use as one of self's keys).
+# self.branch(key) makes a new branch. Self is a branch (or root); key
+# is a string (not already in use as one of self's keys).
 #
-# self.leaf(key) makes a new leaf. Self is a branch (or root) which
-# does not have any branch children; key is a string (not already in
-# use as one of self's keys).
+# self.leaf(key) makes a new leaf. Self is a branch (or root); key is
+# a string (not already in use as one of self's keys).
 #
 # self.field(key, datatype, default = None, optional = None, help =
 # None) describes a new field. Self is a leaf; key and datatype must
 # be strings.
 #
-# self.datum(table) adds the given table to self's data. Self is a
+# self.entry(table) adds the given table to self's entries. Self is a
 # leaf; table must be a Python dictionary.
+#
+# 2. Introspection
+#
+# self.key() returns the key of a branch, leaf or field.
+#
+# self.parent() returns the parent node of a branch or leaf.
+#
+# self.children() returns a list of self's child nodes; self is a
+# branch.
+#
+# self.find(key) returns the child of that branch (or the field of
+# that leaf) which has the given key. If key not found, returns None.
+#
+# 3. I/O
 #
 # self.write(file) writes the tree out to an xml file. Self must be a
 # root.
 #
-# read(file) reads a tree our of an xml file and returns an instance
+# read(file) reads a tree out of an xml file and returns an instance
 # of Root.
-
 
 import xml.etree.ElementTree as etree
 
@@ -56,7 +70,11 @@ def complain(what):
     raise Exception(what)
 
 class Node():
-    pass
+    def parent(self):
+        return self._parent
+
+    def key(self):
+        return self._key
 
 class Branch(Node):
     def __init__(self, key, parent):
@@ -65,62 +83,47 @@ class Branch(Node):
         elif not isinstance(key, str):
             complain('Branch key %s is not a string.' % (key,))
         else:
-            self.children = []
-            self.key = key
-            self.parent = parent
+            self._children = []
+            self._key = key
+            self._parent = parent
 
     def __repr__(self):
-        children = self.children
+        children = self._children
         length = len(children)
-        key = self.key
+        key = self._key
         name = self.__class__.__name__
         if length == 1:
             return '<%s %s (1 child) 08%x>' % (name, key, id(self))
         else:
             return '<%s %s (%d children) 08%x>' % (name, key, length, id(self))
 
-    def child_type(self):
-        if self.children:
-            return self.children[0].__class__.__name__
+    def children(self):
+        return self._children
 
     def find(self, key):
-        for child in self.children:
-            if child.key == key:
+        for child in self._children:
+            if child._key == key:
                 return child
         return None
 
     def branch(self, key):
-        if self.child_type() == 'Leaf':
-            children = self.children
-            if len(children) == 1:
-                fmt = 'May not add a branch to parent %r whose other child is a leaf.'
-            else:
-                fmt = 'May not add a branch to parent %r whose other children are leaves.'
-            complain(fmt % (self,))
         if self.find(key):
-            complain('Branch %s already has a child called %s.' % (self.key, key))
+            complain('Branch %s already has a child called %s.' % (self._key, key))
         branch = Branch(parent = self, key = key)
-        self.children.append(branch)
+        self._children.append(branch)
         return branch
 
     def leaf(self, key):
-        if self.child_type() == 'Branch':
-            children = self.children
-            if len(children) == 1:
-                fmt = 'May not add a leaf to parent %r whose other child is a branch.'
-            else:
-                fmt = 'May not add a leaf to parent %r whose other children are branches.'
-            complain(fmt % (self,))
         if self.find(key):
-            complain('Leaf %s already has a child called %s.' % (self.key, key))
+            complain('Leaf %s already has a child called %s.' % (self._key, key))
         leaf = Leaf(parent = self, key = key)
-        self.children.append(leaf)
+        self._children.append(leaf)
         return leaf
 
     def xml(self):
         name = self.__class__.__name__
-        xml = etree.Element(name, {'key': self.key})
-        for child in self.children:
+        xml = etree.Element(name, {'key': self._key})
+        for child in self._children:
             xml.append(child.xml())
         return xml
 
@@ -148,51 +151,57 @@ class Leaf(Node):
         elif not isinstance(key, str):
             complain('Left key %s is not a string.' % (key,))
         else:
-            # fields is an list whose items each describe one datum
-            self.fields = []
-            # each datum is a table which keys field names against their values
-            self.data = []
-            self.key = key
-            self.parent = parent
+            # fields is an list whose items each describe one entry
+            self._fields = []
+            # each entry is a table which keys field names against their values
+            self._entries = []
+            self._key = key
+            self._parent = parent
 
     def __repr__(self):
-        data = self.data
-        length = len(data)
-        key = self.key
+        entries = self._entries
+        length = len(entries)
+        key = self._key
         if length == 1:
-            return '<Leaf %s (1 datum) 08%x>' % (key, id(self))
+            return '<Leaf %s (1 entry) 08%x>' % (key, id(self))
         else:
-            return '<Leaf %s (%d data) 08%x>' % (key, length, id(self))
+            return '<Leaf %s (%d entries) 08%x>' % (key, length, id(self))
+
+    def fields():
+        return self._fields
+
+    def entries():
+        return self._entries
 
     def find(self, key):
-        for field in self.fields:
-            if field.key == key:
+        for field in self._fields:
+            if field._key == key:
                 return field
         return None
 
     def field(self, key, datatype, default = None, optional = None, help = None):
         if self.find(key):
-            complain('Leaf %s already has a field called %s.' % (self.key, key))
+            complain('Leaf %s already has a field called %s.' % (self._key, key))
         field = Field(self, key, datatype, default, optional, help)
-        self.fields.append(field)
+        self._fields.append(field)
         return field
 
-    def datum(self, table):
+    def entry(self, table):
         if not isinstance(table, dict):
             complain('Leaf table %s is not a dictionary.' % (table,))
         else:
-            self.data.append(table)
+            self._entries.append(table)
             return table
 
     def xml(self):
-        xml = etree.Element('Leaf', {'key': self.key})
-        for field in self.fields:
+        xml = etree.Element('Leaf', {'key': self._key})
+        for field in self._fields:
             xml.append(field.xml())
-        for datum in self.data:
-            d = etree.Element('Datum')
-            for key in datum:
+        for entry in self._entries:
+            d = etree.Element('Entry')
+            for key in entry:
                 v = etree.Element('Value', {'key': key})
-                v.text = str(datum[key])
+                v.text = str(entry[key])
                 d.append(v)
             xml.append(d)
         return xml
@@ -212,10 +221,10 @@ class Field():
             complain('Field datatype %s is not a string.' % (datatype,))
         else:
             self.leaf = leaf
-            self.key = key
+            self._key = key
             # number, range, text, choice, timestamp - enforced during data entry
             self.datatype = datatype
-            # value if this field isn't set in a particular datum
+            # value if this field isn't set in a particular entry
             self.default = default
             # also enforced only by data entry
             self.optional = optional
@@ -223,10 +232,13 @@ class Field():
             self.help = help
 
     def __repr__(self):
-        return '<Field %s, for %s 0x%x>' %  (self.key, self.leaf.key, id(self))
+        return '<Field %s, for %s 0x%x>' %  (self._key, self.leaf._key, id(self))
+
+    def key(self):
+        return self._key
 
     def xml(self):
-        xml = etree.Element('Field', {'key': self.key, 'datatype': self.datatype})
+        xml = etree.Element('Field', {'key': self._key, 'datatype': self.datatype})
         if self.optional:
             xml.set('optional', True)
             xml.set('default', self.default)
@@ -243,10 +255,10 @@ class Field():
         return parent.field(get('key'), get('datatype'), get('default'), get('optional'), get('help'))
 
 
-class Datum:
+class Entry:
     @classmethod
     def parse(cls, elt, parent, parse_children):
-        return parse_children(lambda(key): parent.datum({}))
+        return parse_children(lambda(key): parent.entry({}))
 
 
 class Value:
@@ -275,9 +287,9 @@ def read(file):
             return globals()[elt.tag].parse(elt, parent, parse_children)
         except KeyError:
             complain('Element tag %s unknown.' % (elt,))
-    root = etree.parse(file).getroot()
+    root = parse(etree.parse(file).getroot(), None)
     if isinstance(root, Root):
-        return parse(root, None)
+        return root
     else:
         complain('Root %s is not a root.' % (root,))
 
@@ -293,6 +305,6 @@ def test():
     visit = health.leaf('Toilet Visit')
     visit.field('Solidity', 'range(0,10)', None, False, '0 for completely liquid, 10 for healthy')
     visit.field('Gut pain', 'range(0,10)', None, False, '0 for no pain, 10 for screaming')
-    visit.datum({'Solidity': 6, 'Gut pain': 3})
-    visit.datum({'Solidity': 3})
+    visit.entry({'Solidity': 6, 'Gut pain': 3})
+    visit.entry({'Solidity': 3})
     return root
