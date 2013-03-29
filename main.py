@@ -18,9 +18,37 @@
 #   DONE (Python) Maintainable by Martin
 #   Strategy for updating the tree once there's data in it
 
+# Test (should not error; the new file should be the same as the old
+# one):
 # >>> import main
 # >>> main.read('play.xml').write('play2.xml')
 # >>>
+
+# Interface:
+#
+# new_root(key = 'Everything') makes a new root. Key is a string.
+#
+# self.branch(key) makes a new branch. Self is a branch (or root)
+# which does not have any leaf children; key is a string (not already
+# in use as one of self's keys).
+#
+# self.leaf(key) makes a new leaf. Self is a branch (or root) which
+# does not have any branch children; key is a string (not already in
+# use as one of self's keys).
+#
+# self.field(key, datatype, default = None, optional = None, help =
+# None) describes a new field. Self is a leaf; key and datatype must
+# be strings.
+#
+# self.datum(table) adds the given table to self's data. Self is a
+# leaf; table must be a Python dictionary.
+#
+# self.write(file) writes the tree out to an xml file. Self must be a
+# root.
+#
+# read(file) reads a tree our of an xml file and returns an instance
+# of Root.
+
 
 import xml.etree.ElementTree as etree
 
@@ -113,26 +141,6 @@ class Root(Branch):
             return parse_children(new_root)
 
 
-def read(file):
-    def parse(elt, parent):
-        attrib = elt.attrib
-        if 'key' in attrib:
-            key = attrib['key']
-        else:
-            key = None
-        def parse_children(constructor):
-            instance = constructor(key)
-            for child in elt:
-                parse(child, instance)
-            return instance
-        try:
-            return globals()[elt.tag].parse(elt, parent, parse_children)
-        except KeyError:
-            complain('Element tag %s unknown.' % (elt,))
-    root = etree.parse(file).getroot()
-    return parse(root, None)
-
-
 class Leaf(Node):
     def __init__(self, key, parent):
         if not isinstance(parent, Branch):
@@ -162,7 +170,7 @@ class Leaf(Node):
                 return field
         return None
 
-    def field(self, key, datatype, default, optional, help):
+    def field(self, key, datatype, default = None, optional = None, help = None):
         if self.find(key):
             complain('Leaf %s already has a field called %s.' % (self.key, key))
         field = Field(self, key, datatype, default, optional, help)
@@ -170,8 +178,11 @@ class Leaf(Node):
         return field
 
     def datum(self, table):
-        self.data.append(table)
-        return table
+        if not isinstance(table, dict):
+            complain('Leaf table %s is not a dictionary.' % (table,))
+        else:
+            self.data.append(table)
+            return table
 
     def xml(self):
         xml = etree.Element('Leaf', {'key': self.key})
@@ -197,13 +208,15 @@ class Field():
             complain('Field leaf %s is not a leaf.' % (leaf,))
         elif not isinstance(key, str):
             complain('Field key %s is not a string.' % (key,))
+        elif not isinstance(datatype, str):
+            complain('Field datatype %s is not a string.' % (datatype,))
         else:
             self.leaf = leaf
             self.key = key
-            # value if this field isn't set in a particular datum
-            self.default = default
             # number, range, text, choice, timestamp - enforced during data entry
             self.datatype = datatype
+            # value if this field isn't set in a particular datum
+            self.default = default
             # also enforced only by data entry
             self.optional = optional
             # currently a shortish string, might add more text, images or whatever later
@@ -235,6 +248,7 @@ class Datum:
     def parse(cls, elt, parent, parse_children):
         return parse_children(lambda(key): parent.datum({}))
 
+
 class Value:
     @classmethod
     def parse(cls, elt, parent, parse_children):
@@ -243,6 +257,29 @@ class Value:
         except ValueError:
             value = elt.text
         parent[elt.attrib['key']] = value
+
+
+def read(file):
+    def parse(elt, parent):
+        attrib = elt.attrib
+        if 'key' in attrib:
+            key = attrib['key']
+        else:
+            key = None
+        def parse_children(constructor):
+            instance = constructor(key)
+            for child in elt:
+                parse(child, instance)
+            return instance
+        try:
+            return globals()[elt.tag].parse(elt, parent, parse_children)
+        except KeyError:
+            complain('Element tag %s unknown.' % (elt,))
+    root = etree.parse(file).getroot()
+    if isinstance(root, Root):
+        return parse(root, None)
+    else:
+        complain('Root %s is not a root.' % (root,))
 
 
 def new_root(key = 'Everything'):
