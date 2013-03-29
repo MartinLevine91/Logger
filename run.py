@@ -76,33 +76,26 @@ def selectLeaf(current):
 
 
 
-dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root,"timeStamp":
 
 def addLogTemplate(branch):
-"""
-v0
--add field, give options for dataType
+#v0
+#-add field, give options for dataType
 # number, range, text, choice, timestamp 
-"""
+
     
     while True:
         break
+    return None
 
+print "hello"
 
-
+dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root,"timeStamp":"fish"}
 
 menu = main.read("Menu.xml")
 current = menu
 while current != None:
-    os.system('clear') 
     current = selectLeaf(menu)
     print current
-
-
-
-
-
-
 
 
 
