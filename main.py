@@ -56,6 +56,10 @@
 # self.find(key) returns the child of that branch (or the field of
 # that leaf) which has the given key. If key not found, returns None.
 #
+# self.entries() returns the entries of that leaf as a list of python Dictionaries.
+#
+# self.fields() returns the fields of that leaf as a list.
+#
 # 3. I/O
 #
 # self.write(file) writes the tree out to an xml file. Self must be a
