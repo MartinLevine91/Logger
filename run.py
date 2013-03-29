@@ -44,6 +44,7 @@ import main
 import os
 
 def selectLeaf(current):
+    print current
     while True:
         listOfChildren = current.children()
         for i in range(len(listOfChildren)):
@@ -75,6 +76,7 @@ def selectLeaf(current):
     return current
 
 
+dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root,"timeStamp":"fish"}
 
 
 def addLogTemplate(branch):
@@ -87,15 +89,12 @@ def addLogTemplate(branch):
         break
     return None
 
-print "hello"
-
-dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root,"timeStamp":"fish"}
 
 menu = main.read("Menu.xml")
 current = menu
 while current != None:
     current = selectLeaf(menu)
-    print current
+    print "User selected:", current
 
 
 
