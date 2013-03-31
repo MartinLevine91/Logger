@@ -8,7 +8,7 @@
 # * DONE Each leaf stores entries, each entry has a number of fields
 # * SEMI-DONE Define datatypes for fields
 # * Datatypes to include int, range, choice (plus subchoices?), text, timestamp
-#   Timestamp (minute): now, yesterday, ... !! check this is DST-safe !!
+#   DONE Timestamp (minute): now, yesterday, ... !! check this is DST-safe !!
 #   NOT MY PROBLEM Navigate by single keystrokes
 # * Change descriptions and add  / delete fields, on the fly
 #   Hidden fields (for redundant information)
@@ -44,11 +44,17 @@
 # self.entry(table) adds the given table to self's entries. Self is a
 # leaf; table must be a Python dictionary.
 #
+# self.remove() removes a branch, leaf or field from its parent.
+#
+# self.remove_entry(key) removes an entry from its leaf.
+#
+#
 # 2. Introspection
 #
 # self.key() returns the key of a branch, leaf or field.
 #
-# self.parent() returns the parent node of a branch or leaf.
+# self.parent() returns the parent node of a branch or leaf, or the
+# leaf of an entry.
 #
 # self.children() returns a list of self's child nodes; self is a
 # branch.
@@ -61,6 +67,7 @@
 #
 # self.fields() returns the fields of that leaf as a list.
 #
+#
 # 3. I/O
 #
 # self.write(file) writes the tree out to an xml file. Self must be a
@@ -68,6 +75,7 @@
 #
 # read(file) reads a tree out of an xml file and returns an instance
 # of Root.
+#
 #
 # 4. Time utilities
 #
@@ -89,8 +97,10 @@
 import xml.etree.ElementTree as etree
 import time
 
+
 def complain(what):
     raise Exception(what)
+
 
 class Node():
     def parent(self):
@@ -98,6 +108,10 @@ class Node():
 
     def key(self):
         return self._key
+
+    def remove(self):
+        self._parent._children.remove(self)
+
 
 class Branch(Node):
     def __init__(self, key, parent):
@@ -156,13 +170,16 @@ class Branch(Node):
 
 
 class Root(Branch):
+    def remove(self):
+        complain('Cannot remove root.')
+
     def write(self, file):
         etree.ElementTree(self.xml()).write(file)
 
     @classmethod
     def parse(cls, elt, parent, parse_children):
         if parent:
-            complain("Root cannot have parent %r" % (parent,))
+            complain('Root cannot have parent %r' % (parent,))
         else:
             return parse_children(root)
 
@@ -190,10 +207,13 @@ class Leaf(Node):
         else:
             return '<Leaf %s (%d entries) 08%x>' % (key, length, id(self))
 
-    def fields():
+    def remove_entry(self, entry):
+        self._entries.remove(entry)
+
+    def fields(self):
         return self._fields
 
-    def entries():
+    def entries(self):
         return self._entries
 
     def find(self, key):
@@ -243,7 +263,7 @@ class Field():
         elif not isinstance(datatype, str):
             complain('Field datatype %s is not a string.' % (datatype,))
         else:
-            self.leaf = leaf
+            self._leaf = leaf
             self._key = key
             # number, range, text, choice, timestamp - enforced during data entry
             self.datatype = datatype
@@ -255,10 +275,16 @@ class Field():
             self.help = help
 
     def __repr__(self):
-        return '<Field %s, for %s 0x%x>' %  (self._key, self.leaf._key, id(self))
+        return '<Field %s, for %s 0x%x>' %  (self._key, self._leaf._key, id(self))
 
     def key(self):
         return self._key
+
+    def parent(self):
+        return self._leaf
+
+    def remove(self):
+        self._leaf._fields.remove(self)
 
     def xml(self):
         xml = etree.Element('Field', {'key': self._key, 'datatype': self.datatype})
@@ -278,23 +304,21 @@ class Field():
         return parent.field(get('key'), get('datatype'), get('default'), get('optional'), get('help'))
 
 
-class Entry:
-    @classmethod
-    def parse(cls, elt, parent, parse_children):
-        return parse_children(lambda(key): parent.entry({}))
-
-
-class Value:
-    @classmethod
-    def parse(cls, elt, parent, parse_children):
-        try:
-            value = int(elt.text)
-        except ValueError:
-            value = elt.text
-        parent[elt.attrib['key']] = value
-
-
 def read(file):
+    class Entry:
+        @classmethod
+        def parse(cls, elt, parent, parse_children):
+            return parse_children(lambda(key): parent.entry({}))
+
+    class Value:
+        @classmethod
+        def parse(cls, elt, parent, parse_children):
+            try:
+                value = int(elt.text)
+            except ValueError:
+                value = elt.text
+            parent[elt.attrib['key']] = value
+
     def parse(elt, parent):
         attrib = elt.attrib
         if 'key' in attrib:
@@ -307,9 +331,11 @@ def read(file):
                 parse(child, instance)
             return instance
         try:
-            return globals()[elt.tag].parse(elt, parent, parse_children)
+            return names[elt.tag].parse(elt, parent, parse_children)
         except KeyError:
             complain('Element tag %s unknown.' % (elt,))
+
+    names = dict(globals(), **locals())                 # a shameful hack
     root = parse(etree.parse(file).getroot(), None)
     if isinstance(root, Root):
         return root
@@ -357,11 +383,11 @@ def now():
 
 
 def test():
-    root = root('Test')
-    health = root.branch('Health')
+    this = root('Test')
+    health = this.branch('Health')
     visit = health.leaf('Toilet Visit')
     visit.field('Solidity', 'range(0,10)', None, False, '0 for completely liquid, 10 for healthy')
     visit.field('Gut pain', 'range(0,10)', None, False, '0 for no pain, 10 for screaming')
     visit.entry({'Solidity': 6, 'Gut pain': 3})
     visit.entry({'Solidity': 3})
-    return root
+    return this
