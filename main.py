@@ -44,6 +44,10 @@
 # self.entry(table) adds the given table to self's entries. Self is a
 # leaf; table must be a Python dictionary.
 #
+# self.move(parent=None, key=None) changes parent or key (or both) of
+# branch or leaf. Similarly self.move(self, leaf=None, key=None) for a
+# field.
+#
 # self.remove() removes a branch, leaf or field from its parent.
 #
 # self.remove_entry(key) removes an entry from its leaf.
@@ -109,6 +113,26 @@ class Node():
     def key(self):
         return self._key
 
+    def move(self, parent=None, key=None):
+        if isinstance(parent, Branch):
+            if key is None:
+                key = self._key
+            if parent.find(key):
+                complain('New parent %s already has a child called %s' % (parent, key))
+            else:
+                self._parent._children.remove(self)
+                parent._children.append(self)
+                self._parent = parent
+                self._key = key
+        elif parent is None:
+            if key is not None:
+                if self._parent.find(key):
+                    complain('%s already has a child called %s' % (self._parent, key))
+                else:
+                    self._key = key
+        else:
+            complain('New parent %s for %s isn\'t a branch.' % (parent, self))
+
     def remove(self):
         self._parent._children.remove(self)
 
@@ -172,6 +196,11 @@ class Branch(Node):
 class Root(Branch):
     def remove(self):
         complain('Cannot remove root.')
+
+    def move(self, parent=None, key=None):
+        if parent is not None:
+            complain('Cannot move node.')
+        self._key = key
 
     def write(self, file):
         etree.ElementTree(self.xml()).write(file)
@@ -282,6 +311,26 @@ class Field():
 
     def parent(self):
         return self._leaf
+
+    def move(self, leaf=None, key=None):
+        if isinstance(leaf, Node):
+            if key is None:
+                key = self._key
+            if leaf.find(key):
+                complain('New parent %s already has a field called %s' % (leaf, key))
+            else:
+                self._leaf._fields.remove(self)
+                leaf._fields.append(self)
+                self._leaf = leaf
+                self._key = key
+        elif leaf is None:
+            if key is not None:
+                if self._leaf.find(key):
+                    complain('%s already has a field called %s' % (self._leaf, key))
+                else:
+                    self._key = key
+        else:
+            complain('New leaf %s for %s isn\'t a node.' % (leaf, self))
 
     def remove(self):
         self._leaf._fields.remove(self)
