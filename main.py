@@ -29,7 +29,7 @@
 #
 # 1. Constructors
 #
-# new_root(key = 'Everything') makes a new root. Key is a string.
+# root(key = 'Everything') makes a new root. Key is a string.
 #
 # self.branch(key) makes a new branch. Self is a branch (or root); key
 # is a string (not already in use as one of self's keys).
@@ -56,7 +56,8 @@
 # self.find(key) returns the child of that branch (or the field of
 # that leaf) which has the given key. If key not found, returns None.
 #
-# self.entries() returns the entries of that leaf as a list of python Dictionaries.
+# self.entries() returns the entries of that leaf as a list of python
+# Dictionaries.
 #
 # self.fields() returns the fields of that leaf as a list.
 #
@@ -67,8 +68,26 @@
 #
 # read(file) reads a tree out of an xml file and returns an instance
 # of Root.
+#
+# 4. Time utilities
+#
+# now() returns a Time instance representing the current date/time.
+#
+# str(Time) returns a string (such as 'Sun Jun 20 23:21:00 1993')
+# corresponding to such a Time.
+#
+# self.previous(days=None, hours=None, minutes=None) returns a new
+# Time which varies from self (another Time) by the stated
+# ammounts. If you give hours but not minutes, the Time will be
+# rounded back to the start of the hour; if you give days but not
+# hours the Time will be rounded back to the start of the day. For
+# example, t.previous(days=0) would give the midnight just gone; and
+# t.previous(hours=1, minutes=0) gives precisely one hour ago.
+
+
 
 import xml.etree.ElementTree as etree
+import time
 
 def complain(what):
     raise Exception(what)
@@ -145,7 +164,7 @@ class Root(Branch):
         if parent:
             complain("Root cannot have parent %r" % (parent,))
         else:
-            return parse_children(new_root)
+            return parse_children(root)
 
 
 class Leaf(Node):
@@ -298,13 +317,47 @@ def read(file):
         complain('Root %s is not a root.' % (root,))
 
 
-def new_root(key = 'Everything'):
+def root(key = 'Everything'):
     return Root(key, None)
 
-root = new_root()
+class Time:
+    def __init__(self, time, roundto=60):
+        self.time = int(time / roundto) * roundto
+
+    def __repr__(self):
+        return '<Time %d>' %  (self.time,)
+
+    def __str__(self):
+        return time.asctime(time.localtime(self.time))
+
+    def previous(self, days=None, hours=None, minutes=None):
+        delta = 0
+        if days: delta = delta + days * 86400
+        if hours: delta = delta + hours * 3600
+        if minutes: delta = delta + minutes * 60
+        new = self.time - delta
+        if hours is None and days is not None:
+            # Round back to midnight
+            maybe = Time(new, 86400)
+            # Check for summertime changes - the above rounding may have been bogus
+            hours = time.localtime(maybe.time).tm_hour
+            if hours == 0:
+                return maybe
+            elif hours == 1:
+                return Time(maybe.time - 3600)
+            else:
+                complain('Lost in time. And lost in space. And meaning.')
+        elif minutes is None and hours is not None:
+            return Time(new, 3600)
+        else:
+            return Time(new)
+
+def now():
+    return Time(time.mktime(time.localtime()))
+
 
 def test():
-    root = new_root('Test')
+    root = root('Test')
     health = root.branch('Health')
     visit = health.leaf('Toilet Visit')
     visit.field('Solidity', 'range(0,10)', None, False, '0 for completely liquid, 10 for healthy')
