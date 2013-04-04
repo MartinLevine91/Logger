@@ -40,26 +40,19 @@ is run.
 
 
 import main
-
-import os
+import graphics
 
 def selectLeaf(current):
-    print current
     while True:
-        listOfChildren = current.children()
-        for i in range(len(listOfChildren)):
-            print str(i) + ". " + listOfChildren[i].key()
-        if not isinstance(current,main.Root):
-            print str(len(listOfChildren)) +". Back"
-        else:
-            print str(len(listOfChildren)) +". Quit"
-        
+        graphics.drawMenuSelection(current)
         userIn = input()
-            
+
+        listOfChildren = current.children()
+        
         if isinstance(userIn,int):
-            if userIn < len(listOfChildren) and userIn >= 0:
-                current = listOfChildren[userIn]
-            elif userIn == len(listOfChildren):
+            if userIn < len(listOfChildren)+1 and userIn >= 0:
+                current = listOfChildren[userIn-1]
+            elif userIn == len(listOfChildren)+1:
                 current = current.parent()
 
         if isinstance(current,main.Leaf):
@@ -90,11 +83,63 @@ def addLogTemplate(branch):
     return None
 
 
+
+################################################################################
+# RUN - ACTUAL                                                                 #
+################################################################################
+"""
+%%VIEW MODES%%
+!!
+_____________________________
+Title bar
+----------------------------
+!Content!
+
+
+
+
+
+!Content!
+-----------------------------
+Instruction bar
+-----------------------------
+User input bar
+
+_____________________________
+!!
+
+Examples:
+
+Title bar: "Menu selction: ~/'Add or edit log templates'/..."
+Content: List of options (add logs, edit logs, back)
+Instruction bar: "Select menu option from above."
+User input: "1"
+
+Title bar: "Adding entries to Health/'Toilet Visit'"
+Content: Table of previous entries.
+Instruction bar: "Rate consistency on a scale of 0 to 10, 'H' for help with this datum, 'B' to go back to previous datum or 'Q' to quit entry"
+User input: "4.5"
+
+Title bar: "Editting log template - Health/Sleep"
+Content: Table of datums, complete with defaults and ranges etc. Followed by list of options/instructions for next part of next datum
+Instruction bar: "Choose a data type from the list for 'Asleep by'"
+User input: "4"
+
+
+
+
+
+
+
+
+"""
 menu = main.read("Menu.xml")
 current = menu
-while current != None:
-    current = selectLeaf(menu)
-    print "User selected:", current
+
+
+
+current = selectLeaf(menu)
+print "User selected:", current
 
 
 
