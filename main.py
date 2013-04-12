@@ -11,7 +11,7 @@
 #   DONE Timestamp (minute): now, yesterday, ... !! check this is DST-safe !!
 #   NOT MY PROBLEM Navigate by single keystrokes
 # * Change descriptions and add  / delete fields, on the fly
-#   Hidden fields (for redundant information)
+#   Hidden data (for redundant information) - ie when a field has been removed ("hidden") from that leaf
 #   NOT MY PROBLEM Easy save-and-quit
 #
 # Attributes:
@@ -350,7 +350,7 @@ class Field():
         def get(k):
             if k in attrib:
                 return attrib[k]
-        return parent.field(get('key'), get('datatype'), get('default'), get('optional'), get('help'))
+        return parent.field(*(map(get,('key', 'datatype', 'default', 'optional', 'help'))))
 
 
 def read(file):
