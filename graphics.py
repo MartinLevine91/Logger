@@ -60,25 +60,45 @@ def drawWindow(title,content,instruction,userInput):
 
 # drawWindow(["Title!",],["1. *","2. **","3. ***"],["Do things!", "lots of things"], ["input:"])
 
-def drawMenuSelection(currentMenuOption):
+def drawMenuSelection(state):
     """
     Currently will fail if number of options exceeds maximum as determined
     by row limit
     """
-
-    Title_str = "..."
-    rootFinder = currentMenuOption
-    while not isinstance(rootFinder, main.Root):
-        Title_str = rootFinder.key() + "/" + Title_str
-        rootFinder = rootFinder.parent()
+    if isinstance(state.currentM,main.Branch):
+        Title_str = "..."
+        rootFinder = state.currentM
+        while not isinstance(rootFinder, main.Root):
+            Title_str = rootFinder.key() + "/" + Title_str
+            rootFinder = rootFinder.parent()
+            
+        maxChars =  WINDOW_WIDTH - len("Menu selection: ~/")
         
-    maxChars =  WINDOW_WIDTH - len("Menu selection: ~/")
-    
-    if len(Title_str) > maxChars:
-        Title_str = "Menu selection: .." + Title_str[-maxChars:]
-    else:
-        Title_str = "Menu selection: ~/" + Title_str
+        if len(Title_str) > maxChars:
+            Title_str = "Menu selection: .." + Title_str[-maxChars:]
+        else:
+            Title_str = "Menu selection: ~/" + Title_str
 
+        currentMenuOption = state.currentM
+    else:
+        Title_str = "..."
+        rootFinder = state.currentL
+        while not isinstance(rootFinder, main.Root):
+            Title_str = rootFinder.key() + "/" + Title_str
+            rootFinder = rootFinder.parent()
+            
+        maxChars =  WINDOW_WIDTH - len(state.currentM.key() + ": ~/")
+        
+        if len(Title_str) > maxChars:
+            Title_str = state.currentM.key() + ": .." + Title_str[-maxChars:]
+        else:
+            Title_str = state.currentM.key() + ": ~/" + Title_str
+
+        currentMenuOption = state.currentL
+
+
+      
+    
     title = [Title_str,]
     
     listOfChildren = currentMenuOption.children()
@@ -92,6 +112,12 @@ def drawMenuSelection(currentMenuOption):
     userInput = ["Option:"]
 
     drawWindow(title,content,instructions,userInput)
-    
+
+def draw(state):
+    if state.returnMode() == "Menu":
+        drawMenuSelection(state)
+    else:
+        print "Cannot draw other modes yet."
+        print cannotDrawOtherModesYet
     
     
