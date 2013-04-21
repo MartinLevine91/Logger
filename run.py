@@ -42,30 +42,17 @@ is run.
 import main
 import graphics
 
-def selectLeaf(current):
-    while True:
-        graphics.drawMenuSelection(current)
-        userIn = input()
+def selectChild(current,userIn):
 
-        listOfChildren = current.children()
-        
-        if isinstance(userIn,int):
-            if userIn < len(listOfChildren)+1 and userIn >= 0:
-                current = listOfChildren[userIn-1]
-            elif userIn == len(listOfChildren)+1:
-                current = current.parent()
 
-        if isinstance(current,main.Leaf):
-            returnStr = ""
-            while not isinstance(current,main.Root):
-                returnStr = "/" + current.key() +  returnStr
-                current = current.parent()
-            returnStr = current.key() + returnStr
-            break
-        if current == None:
-            returnStr = "User quit without selecting an option."
-            break
-    print returnStr
+    listOfChildren = current.children()
+    
+    if isinstance(userIn,int):
+        if userIn < len(listOfChildren)+1 and userIn >= 0:
+            current = listOfChildren[userIn-1]
+        elif userIn == len(listOfChildren)+1:
+            current = current.parent()
+    
     return current
 
 
@@ -82,6 +69,52 @@ def addLogTemplate(branch):
         break
     return None
 
+
+class LoggerState:
+    def __init__(self,currentM,currentL):
+        self.mode = "Menu"
+        self.currentM = currentM
+        self.currentL = currentL
+        self.logs = currentL
+        self.menu = currentM
+    def returnMode(self):
+        return self.mode
+    def changeMode(self,newMode):
+        if newMode in ["Menu","DisplayInfo","AddEntry","AddEditTemplate"]:
+            self.mode = newMode
+            return 0
+        else:
+            print "Invalid mode!"
+            print invalidMode
+
+
+def findNewState(state,userIn):
+    
+
+
+
+    for button in globalButtons:
+        print "Not defined!"
+        print NotDefined
+
+#If in leaf selecting mode    
+    if state.returnMode() == "Menu":
+#If currentM is not a leaf:
+        if isinstance(state.currentM,main.Branch):
+# Select from the children of the currentM
+            state.currentM = selectChild(state.currentM,userIn)
+# If a leaf was selected
+            if isinstance(state.currentM,main.Leaf):
+                print "leaf"
+        elif isinstance(state.currentL,main.Branch):
+            state.currentL = selectChild(state.currentL,userIn)
+            if state.currentL == None:
+                state.currentL = state.logs
+                state.currentM = state.currentM.parent()
+
+                
+
+    return state
 
 
 ################################################################################
@@ -134,12 +167,31 @@ User input: "4"
 
 """
 menu = main.read("Menu.xml")
-current = menu
 
+logs = main.read("Logs.xml")
 
-
+globalButtons = {}
+"""
 current = selectLeaf(menu)
 print "User selected:", current
+"""
 
+state = LoggerState(menu,logs)
+
+
+
+while True:
+
+    graphics.draw(state)    
+
+
+    userIn = input()
+
+
+    state = findNewState(state,userIn)
+    
+
+    if isinstance(state.currentM,main.Leaf) and isinstance(state.currentL,main.Leaf):
+        break
 
 
