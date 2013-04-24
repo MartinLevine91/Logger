@@ -1,3 +1,18 @@
+"""
+STARTING SIMPLE
+
+***CAN BUILD OPTION SCREEN***
+==> Feed it list of options ["milk","cheese","yogurt","cream"], get content back
+==> Feed it content, title (left part, length reducable right part),instructions, prompt
+
+
+
+
+"""
+
+
+
+
 import main
 
 
@@ -8,6 +23,8 @@ def superClear():
     for i in range(WINDOW_HEIGHT*4):
         print ""
 
+
+
 def drawWindow(title,content,instruction,prompt):
     """
     Draws a window from lists of title, content, instruction and userInput.
@@ -17,7 +34,7 @@ def drawWindow(title,content,instruction,prompt):
     sectionChar = "-"
     endSection = [(WINDOW_WIDTH * sectionChar),]
     newLine = [""]
-    
+
     lineCount = len(title+content+instruction+prompt) + 3
 
     if lineCount > WINDOW_HEIGHT:
@@ -53,51 +70,26 @@ def drawWindow(title,content,instruction,prompt):
         print output[WINDOW_HEIGHT-1],
 
 
-# drawWindow(["Title!",],["1. *","2. **","3. ***"],["Do things!", "lots of things"], ["input:"])
-def drawMenuSelection(state):
+
+
+
+def drawMainMenu(menu):
     """
     Currently will fail if number of options exceeds maximum as determined
     by row limit
     """
-    if isinstance(state.currentM,main.Branch):
-        Title_str = "..."
-        rootFinder = state.currentM
-        while not isinstance(rootFinder, main.Root):
-            Title_str = rootFinder.key() + "/" + Title_str
-            rootFinder = rootFinder.parent()
-            
-        maxChars =  WINDOW_WIDTH - len("Menu selection: ~/")
-        
-        if len(Title_str) > maxChars:
-            Title_str = "Menu selection: .." + Title_str[-maxChars:]
-        else:
-            Title_str = "Menu selection: ~/" + Title_str
 
-        currentMenuOption = state.currentM
-    else:
-        Title_str = "..."
-        rootFinder = state.currentL
-        while not isinstance(rootFinder, main.Root):
-            Title_str = rootFinder.key() + "/" + Title_str
-            rootFinder = rootFinder.parent()
-            
-        maxChars =  WINDOW_WIDTH - len(state.currentM.key() + ": ~/")
-        
-        if len(Title_str) > maxChars:
-            Title_str = state.currentM.key() + ": .." + Title_str[-maxChars:]
-        else:
-            Title_str = state.currentM.key() + ": ~/" + Title_str
-
-        currentMenuOption = state.currentL
-    
+#Draw the title:    
+    Title_str = findChoiceTitle(menu,"Menu selection",WINDOW_WIDTH)
     title = [Title_str,]
-    
-    listOfChildren = currentMenuOption.children()
-    content = []
-    for i in range(len(listOfChildren)):
-        content.append(str(i+1) + ". " + listOfChildren[i].key())
 
-    content.append(str(len(listOfChildren)+1) + ". Back")
+#List the choices
+    listOfChoices = menu.currentChoiceList
+    content = []
+    for i in range(len(listOfChoices)):
+        content.append(str(i+1) + ". " + listOfChoices[i][0])
+
+    content.append(str(len(listOfChoices)+1) + ". Back")
     
     instructions = ["Just pick an option from above.","And enter it below!"]
     prompt = ["Option:"]
@@ -105,11 +97,47 @@ def drawMenuSelection(state):
     drawWindow(title,content,instructions,prompt)
 
 
-def draw(state):
-    if state.returnMode() == "Menu":
-        drawMenuSelection(state)
+
+
+
+
+
+def findChoiceTitle(choiceToSearchThrough,openingString,maxWidth):
+    
+    Title_str = ""
+    titleFinder = choiceToSearchThrough.choiceList
+    
+    for i in range(len(choiceToSearchThrough.keyList)):
+        Title_str = Title_str + titleFinder[choiceToSearchThrough.keyList[i]][0] +"/"
+        titleFinder = titleFinder[choiceToSearchThrough.keyList[i]][1]
+
+
+
+    maxChars =  maxWidth - len(openingString) - 4
+    
+    if len(Title_str) > maxChars:
+        Title_str = openingString + ": .." + Title_str[-(maxChars-2):]
     else:
-        print "Cannot draw other modes yet."
-        print cannotDrawOtherModesYet
+        Title_str = openingString + ": ~/" + Title_str
+
     
+    return Title_str
+
+
+def drawNotYetProgrammed():
+    title = ["Not yet programmed.",]
+    content = ["",]
+    instructionString = "This part of the program has not been completed yet, enter any input to return to the part of the program that sent you here."
+    instructions = splitToWidth(instructionString, WINDOW_WIDTH)
+    prompt = ["Press the any key:",]
+    drawWindow(title,content,instructions,prompt)
+
     
+
+def splitToWidth(longStr,maxWidth):
+    strList = []
+    while len(longStr) > maxWidth:
+        strList.append(longStr[:maxWidth])
+        longStr = longStr[maxWidth:]
+    strList.append(longStr)
+    return strList
