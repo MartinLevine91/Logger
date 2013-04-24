@@ -8,38 +8,35 @@ def superClear():
     for i in range(WINDOW_HEIGHT*4):
         print ""
 
-def drawWindow(title,content,instruction,userInput):
+def drawWindow(title,content,instruction,prompt):
     """
     Draws a window from lists of title, content, instruction and userInput.
     Lines must not be more than maximum width and there must not be more than
     the maximum number of rows. Any empty space will be filled up though.
-    """
-
-    
+    """    
     sectionChar = "-"
     endSection = [(WINDOW_WIDTH * sectionChar),]
     newLine = [""]
     
-    lineCount = len(title+content+instruction+userInput) + 3
+    lineCount = len(title+content+instruction+prompt) + 3
 
     if lineCount > WINDOW_HEIGHT:
         print "rendering error! used too many rows"
         print "title       ", len(title)
         print "content     ", len(content)
         print "instruction ", len(instruction)
-        print "userinput   ", len(userinput)
+        print "userinput   ", len(prompt)
         print "divide lines", 3
         print "             ____"
         print "sum =       ", lineCount
         print
         print "max =", WINDOW_HEIGHT
-        print error
-        
+        print error 
     else:
         output = title + endSection + \
                  content + (WINDOW_HEIGHT - lineCount)*newLine + endSection + \
                  instruction + endSection +\
-                 userInput
+                 prompt
 
         for i in range(WINDOW_HEIGHT):
             line = output[i]
@@ -56,10 +53,7 @@ def drawWindow(title,content,instruction,userInput):
         print output[WINDOW_HEIGHT-1],
 
 
-
-
 # drawWindow(["Title!",],["1. *","2. **","3. ***"],["Do things!", "lots of things"], ["input:"])
-
 def drawMenuSelection(state):
     """
     Currently will fail if number of options exceeds maximum as determined
@@ -95,9 +89,6 @@ def drawMenuSelection(state):
             Title_str = state.currentM.key() + ": ~/" + Title_str
 
         currentMenuOption = state.currentL
-
-
-      
     
     title = [Title_str,]
     
@@ -109,9 +100,10 @@ def drawMenuSelection(state):
     content.append(str(len(listOfChildren)+1) + ". Back")
     
     instructions = ["Just pick an option from above.","And enter it below!"]
-    userInput = ["Option:"]
+    prompt = ["Option:"]
 
-    drawWindow(title,content,instructions,userInput)
+    drawWindow(title,content,instructions,prompt)
+
 
 def draw(state):
     if state.returnMode() == "Menu":
