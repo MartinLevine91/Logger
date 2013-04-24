@@ -38,7 +38,7 @@
 # a string (not already in use as one of self's keys).
 #
 # self.field(key, datatype, default = None, optional = None, help =
-# None) describes a new field. Self is a leaf; key and datatype must
+# None, hidden = False) describes a new field. Self is a leaf; key and datatype must
 # be strings.
 #
 # self.entry(table) adds the given table to self's entries. Self is a
@@ -251,10 +251,10 @@ class Leaf(Node):
                 return field
         return None
 
-    def field(self, key, datatype, default = None, optional = None, help = None):
+    def field(self, key, datatype, default = None, optional = None, help = None, hidden = False):
         if self.find(key):
             complain('Leaf %s already has a field called %s.' % (self._key, key))
-        field = Field(self, key, datatype, default, optional, help)
+        field = Field(self, key, datatype, default, optional, help, hidden)
         self._fields.append(field)
         return field
 
@@ -284,7 +284,7 @@ class Leaf(Node):
 
 
 class Field():
-    def __init__(self, leaf, key, datatype, default=None, optional=None, help=None):
+    def __init__(self, leaf, key, datatype, default=None, optional=None, help=None, hidden = False):
         if not isinstance(leaf, Leaf):
             complain('Field leaf %s is not a leaf.' % (leaf,))
         elif not isinstance(key, str):
@@ -302,6 +302,8 @@ class Field():
             self.optional = optional
             # currently a shortish string, might add more text, images or whatever later
             self.help = help
+            # true or false            
+            self.hidden = hidden
 
     def __repr__(self):
         return '<Field %s, for %s 0x%x>' %  (self._key, self._leaf._key, id(self))
