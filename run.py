@@ -36,91 +36,6 @@ is run.
 * Build in menu navigation with a runMenuOption simply printing the selected leags' location.
 
 
-"""
-
-
-import main
-import graphics
-
-def selectChild(current,userIn):
-
-
-    listOfChildren = current.children()
-    
-    if isinstance(userIn,int):
-        if userIn < len(listOfChildren)+1 and userIn >= 0:
-            current = listOfChildren[userIn-1]
-        elif userIn == len(listOfChildren)+1:
-            current = current.parent()
-    
-    return current
-
-
-dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root,"timeStamp":"fish"}
-
-
-def addLogTemplate(branch):
-#v0
-#-add field, give options for dataType
-# number, range, text, choice, timestamp 
-
-    
-    while True:
-        break
-    return None
-
-
-class LoggerState:
-    def __init__(self,currentM,currentL):
-        self.mode = "Menu"
-        self.currentM = currentM
-        self.currentL = currentL
-        self.logs = currentL
-        self.menu = currentM
-    def returnMode(self):
-        return self.mode
-    def changeMode(self,newMode):
-        if newMode in ["Menu","DisplayInfo","AddEntry","AddEditTemplate"]:
-            self.mode = newMode
-            return 0
-        else:
-            print "Invalid mode!"
-            print invalidMode
-
-
-def findNewState(state,userIn):
-    
-
-
-
-    for button in globalButtons:
-        print "Not defined!"
-        print NotDefined
-
-#If in leaf selecting mode    
-    if state.returnMode() == "Menu":
-#If currentM is not a leaf:
-        if isinstance(state.currentM,main.Branch):
-# Select from the children of the currentM
-            state.currentM = selectChild(state.currentM,userIn)
-# If a leaf was selected
-            if isinstance(state.currentM,main.Leaf):
-                print "leaf"
-        elif isinstance(state.currentL,main.Branch):
-            state.currentL = selectChild(state.currentL,userIn)
-            if state.currentL == None:
-                state.currentL = state.logs
-                state.currentM = state.currentM.parent()
-
-                
-
-    return state
-
-
-################################################################################
-# RUN - ACTUAL                                                                 #
-################################################################################
-"""
 %%VIEW MODES%%
 !!
 _____________________________
@@ -166,9 +81,189 @@ User input: "4"
 
 
 """
+
+
+import main
+import graphics
+
+
+def selectNodeChild(current,userIn):
+
+    listOfChildren = current.children()
+    
+    if isinstance(userIn,int):
+        if userIn < len(listOfChildren)+1 and userIn >= 0:
+            current = listOfChildren[userIn-1]
+        elif userIn == len(listOfChildren)+1:
+            current = current.parent()
+    
+    return current
+
+
+
+
+def addLogTemplate(branch):
+#v0
+#-add field, give options for dataType
+# number, range, text, choice, timestamp 
+
+    
+    while True:
+        break
+    return None
+
+
+class LoggerState:
+    def __init__(self,menu,logRoot):
+        self.mode = "Menu"
+        self.menu = menu
+        self.currentL = logRoot
+        self.logs = logRoot
+    def returnMode(self):
+        return self.mode
+    def changeMode(self,newMode):
+        if newMode in ["Menu","DisplayInfo","AddEntry","AddEditTemplate"]:
+            self.mode = newMode
+            return 0
+        else:
+            print "Invalid mode!"
+            print invalidMode
+
+
+class Choice:
+# List of form [[name1, option],
+#               [name2,[[name2a,option],[name2b,option]],
+#               [name3,option]]
+# list[
+
+    def __init__(self, choiceList):
+        self.choiceList = choiceList
+        self.currentChoiceList = choiceList
+        self.keyList = []
+        self.name = ""
+        
+    def updateCurrentList(self):
+        currentChoiceList = self.choiceList
+        self.name = ""
+        for key in self.keyList:
+            self.name = currentChoiceList[key][0]
+            currentChoiceList = currentChoiceList[key][1]
+        self.currentChoiceList = currentChoiceList
+        
+        
+    def pickChoice(self,key):
+        # Pick a choice, indexing from one. If currently on a leaf choice, it assumes the wanted choice is "back"        
+        if isinstance(self.currentChoiceList,list):
+            if key-1 < len(self.currentChoiceList):
+                self.keyList.append(key-1)
+            elif key-1 == len(self.currentChoiceList):
+                self.keyList.pop()
+
+            self.updateCurrentList()
+        else:
+            self.keyList.pop()
+            self.updateCurrentList()
+
+    def addChoice(self,newName,newOption):
+        if isinstance(currentChoiceList[0],list):
+            #add a sibling option            
+            self.currentChoiceList.append([newName,newOption])
+        else:
+            print error
+
+    def changeName(self,newName):
+        if isinstance(currentChoiceList[0], string):
+            currentChoiceList[0] = newName
+        else:
+            print error
+
+    def changeOption(self,newOption):
+        if isinstance(currentChoiceList[0], string):
+            currentChoiceList[1] = newOption
+        else:
+            print error
+        
+    
+
+def userInput():
+    try:
+        userIn = input()
+    except:
+        userIn = None
+    return userIn
+
+
+def mainMenu(state):
+    if hasattr(state.menu.currentChoiceList, '__call__'):
+        #If have selected a function: run it, then return to the parent menu.  
+        state.menu.currentChoiceList(state)
+        state.menu.pickChoice(0)
+
+    #Draw the menu.
+    graphics.drawMainMenu(state.menu)
+
+    #Select the option inputted by the user.
+    UI = userInput()
+    if isinstance(UI,int) and UI > 0:
+        state.menu.pickChoice(UI)
+    
+
+def addEntry(state):
+    graphics.drawNotYetProgrammed()
+    userInput()    
+
+    
+def addNewLog(state):
+
+
+
+    
+    graphics.drawNotYetProgrammed()
+    userInput()   
+
+    
+def moveLog(state):
+    graphics.drawNotYetProgrammed()
+    userInput()
+
+    
+def editLog(state):
+    graphics.drawNotYetProgrammed()
+    userInput()
+
+    
+def viewData(state):
+    graphics.drawNotYetProgrammed()
+    userInput()
+
+
+
+################################################################################
+# RUN - ACTUAL                                                                 #
+################################################################################
+
 menu = main.read("Menu.xml")
 
 logs = main.read("Logs.xml")
+
+dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root,"timeStamp":"fish"}
+
+
+# List of form [[name1, option],
+#               [name2,[[name2a,option],[name2b,option]],
+#               [name3,option]]
+
+menu =    Choice( \
+               [["Add new log entry", addEntry], \
+                ["Add or edit a log template", \
+                   [["Add log template", addNewLog], \
+                    ["Edit log template", \
+                       [["Edit template location within data structure", moveLog], \
+                        ["Edit fields of log", editLog]]]]], \
+                ["View log data",viewData]])
+
+
+
 
 globalButtons = {}
 """
@@ -179,19 +274,35 @@ print "User selected:", current
 state = LoggerState(menu,logs)
 
 
+for i in range(10):
+    mainMenu(state)
+
+
+    
+
+
+
+
+
+"""
 
 while True:
 
     graphics.draw(state)    
 
-
-    userIn = input()
-
+    try:
+        userIn = input()
+    except:
+        userIn = None
 
     state = findNewState(state,userIn)
     
-
     if isinstance(state.currentM,main.Leaf) and isinstance(state.currentL,main.Leaf):
         break
 
+
+
+
+
+"""
 
