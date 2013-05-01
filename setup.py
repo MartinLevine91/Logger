@@ -13,3 +13,6 @@ visit.field('Gut pain', 'range(0,10)', None, False, '0 for no pain, 10 for screa
 visit.entry({'Solidity': 6, 'Gut pain': 3})
 visit.entry({'Solidity': 3})
 logs.write("Logs.xml")
+
+
+
