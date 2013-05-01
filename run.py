@@ -156,9 +156,8 @@ class Choice:
         if isinstance(self.currentChoiceList,list):
             if key-1 < len(self.currentChoiceList):
                 self.keyList.append(key-1)
-            elif key-1 == len(self.currentChoiceList):
+            elif key-1 == len(self.currentChoiceList) and len(self.keyList) > 0:
                 self.keyList.pop()
-
             self.updateCurrentList()
         else:
             self.keyList.pop()
@@ -187,26 +186,41 @@ class Choice:
 
 def userInput():
     try:
-        userIn = input()
+        userIn = raw_input()
+        try:
+            userIn = int(userIn)
+        except:
+            try:
+                userIn = str(userIn)
+            except:
+                pass
     except:
         userIn = None
     return userIn
 
 
+
+
 def mainMenu(state):
-    if hasattr(state.menu.currentChoiceList, '__call__'):
-        #If have selected a function: run it, then return to the parent menu.  
-        state.menu.currentChoiceList(state)
-        state.menu.pickChoice(0)
 
-    #Draw the menu.
-    graphics.drawMainMenu(state.menu)
-
-    #Select the option inputted by the user.
-    UI = userInput()
-    if isinstance(UI,int) and UI > 0:
-        state.menu.pickChoice(UI)
+    done = False
     
+    while True:
+        if hasattr(state.menu.currentChoiceList, '__call__'):
+            #If have selected a function: reset the log tree, run the function, then return to the parent menu.  
+            state.currentL = state.logs
+            if state.menu.currentChoiceList(state) == -1:
+                break
+            state.menu.pickChoice(0)
+
+        #Draw the menu.
+        graphics.drawMainMenu(state.menu)
+
+        #Select the option inputted by the user.
+        UI = userInput()
+        if isinstance(UI,int) and UI > 0:
+            state.menu.pickChoice(UI)
+        
 
 def addEntry(state):
     graphics.drawNotYetProgrammed()
@@ -215,27 +229,159 @@ def addEntry(state):
     
 def addNewLog(state):
 
+# Find place for new log
+# Name it
+# Confirm name, then create log
+# 
+#
+#
+#
+#
+#
+#
+#
+    state.currentL = state.logs
+    graphics.drawPickLog("AddNewLog",state)
+
+    while True:
+        UI = userInput()
+        if isinstance(UI, int) and UI > 0:
+            if UI-1 < len(state.currentL.children()):
+                state.currentL = state.currentL.children()[UI-1]
+                if isinstance(state.currentL,main.Leaf):
+                    state.currentL = state.currentL.parent()
+                    graphics.drawPickLog("AddNewLog_noLeaves",state)
+                else:
+                    graphics.drawPickLog("AddNewLog",state)
+
+            elif UI-1 == len(state.currentL.children()):
+                state.currentL = state.currentL.parent()
+                if state.currentL == None:
+                    state.currentL = state.logs
+                    return 0
+                graphics.drawPickLog("AddNewLog",state)
+
+            else:
+                graphics.drawPickLog("AddNewLog",state)
 
 
-    
+
+                
+        elif isinstance(UI, str):
+            if UI.lower() in ["branch","b"]:
+                newLogName = askConfirmString("NameNewLogBranch")
+                if newLogName != None:
+                    state.currentL.branch(newLogName)
+                graphics.drawPickLog("AddNewLog",state)
+            elif UI.lower() in ["leaf","l"]:
+                newLogName = askConfirmString("NameNewLogLeaf")
+                if newLogName != None:
+                    state.currentL.leaf(newLogName)
+                    state.currentL = state.currentL.find(newLogName)
+                    editLog(state)
+                    break    
+                # editLogTemplate - addDatum, 
+                
+                
+            else:
+                graphics.drawPickLog("AddNewLog",state)
+        else:
+            graphics.drawPickLog("AddNewLog_noLeaves",state)
+
+
+        
     graphics.drawNotYetProgrammed()
-    userInput()   
+    userInput()
+    return 0
 
     
 def moveLog(state):
     graphics.drawNotYetProgrammed()
     userInput()
+    return 0
 
     
 def editLog(state):
+    while True:
+        if not isinstance(state.currentL, main.Leaf):
+            if state.currentL == None:
+                state.currentL = state.logs
+            graphics.drawPickLog("EditLog",state)
+            UI = userInput()
+            if isinstance(UI,int):
+                if UI-1 < len(state.currentL.children()):
+                    state.currentL = state.currentL.children()[UI-1]
+                elif UI-1 == len(state.currentL.children()):
+                    state.currentL = state.currentL.parent()
+                    if state.currentL == None:
+                        state.currentL = state.logs
+                        return 0
+        else:
+            print state.currentL.fields()
+            userInput()
+            break
+                    
+            
     graphics.drawNotYetProgrammed()
     userInput()
+    return 0
 
     
 def viewData(state):
     graphics.drawNotYetProgrammed()
     userInput()
+    return 0
 
+def quitProgram(state):
+    while True:
+        graphics.askYesNo("Are you sure you want to quit?")
+        UI = userInput()
+        if isinstance(UI,str):
+            if UI.lower() in ["y","yes"]:
+                break
+            if UI.lower() in ["n","no"]:
+                return 0
+        if UI == 1:
+            break
+    state.logs.write("Logs.xml")
+    return -1
+
+def askConfirmString(key):
+    questionDict = {
+        "NameNewLogBranch":[["Name new branch","","Type the name of the new branch, then press enter.","$"],
+                      ["Confirm branch name","Confirm that you want the new branch to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to create a new branch, enter 'Quit' or 'Q'.","$"]],
+
+        "NameNewLogLeaf":[["Name new leaf","","Type the name of the new leaf, then press enter.","$"],
+                      ["Confirm leaf name","Confirm that you want the new leaf to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to create a new branch, enter 'Quit' or 'Q'.","$"]],
+
+        }
+    askInfo, confirmInfo = questionDict[key]
+
+    
+    progress = "ask"
+
+    while True:
+        if progress == "ask":
+            title,content,instruction,prompt = askInfo
+            graphics.splitAndDraw(title,content,instruction,prompt)
+            ans = userInput()
+            if isinstance(ans, str):
+                progress = "confirm"
+        if progress == "confirm":
+            title,content,instruction,prompt = confirmInfo
+            if "%s" in content:        
+                content = content % ans
+            graphics.splitAndDraw(title,content,instruction,prompt)
+            UI = userInput()
+            if isinstance(UI, str):
+                if UI.lower() in ["y","yes"]:
+                    return ans
+                if UI.lower() in ["q","quit"]:
+                    return None
+                if UI.lower() in ["n","no"]:
+                    progress = "ask"
+                
+        
 
 
 ################################################################################
@@ -260,7 +406,8 @@ menu =    Choice( \
                     ["Edit log template", \
                        [["Edit template location within data structure", moveLog], \
                         ["Edit fields of log", editLog]]]]], \
-                ["View log data",viewData]])
+                ["View log data",viewData], \
+                ["Quit",quitProgram]])
 
 
 
@@ -274,8 +421,7 @@ print "User selected:", current
 state = LoggerState(menu,logs)
 
 
-for i in range(10):
-    mainMenu(state)
+mainMenu(state)
 
 
     
@@ -299,6 +445,8 @@ while True:
     
     if isinstance(state.currentM,main.Leaf) and isinstance(state.currentL,main.Leaf):
         break
+
+
 
 
 
