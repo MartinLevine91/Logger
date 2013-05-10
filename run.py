@@ -82,7 +82,6 @@ User input: "4"
 
 """
 
-
 import main
 import graphics
 
@@ -129,60 +128,6 @@ class LoggerState:
             print "Invalid mode!"
             print invalidMode
 
-
-class Choice:
-# List of form [[name1, option],
-#               [name2,[[name2a,option],[name2b,option]],
-#               [name3,option]]
-# list[
-
-    def __init__(self, choiceList):
-        self.choiceList = choiceList
-        self.currentChoiceList = choiceList
-        self.keyList = []
-        self.name = ""
-        
-    def updateCurrentList(self):
-        currentChoiceList = self.choiceList
-        self.name = ""
-        for key in self.keyList:
-            self.name = currentChoiceList[key][0]
-            currentChoiceList = currentChoiceList[key][1]
-        self.currentChoiceList = currentChoiceList
-        
-        
-    def pickChoice(self,key):
-        # Pick a choice, indexing from one. If currently on a leaf choice, it assumes the wanted choice is "back"        
-        if isinstance(self.currentChoiceList,list):
-            if key-1 < len(self.currentChoiceList):
-                self.keyList.append(key-1)
-            elif key-1 == len(self.currentChoiceList) and len(self.keyList) > 0:
-                self.keyList.pop()
-            self.updateCurrentList()
-        else:
-            self.keyList.pop()
-            self.updateCurrentList()
-
-    def addChoice(self,newName,newOption):
-        if isinstance(currentChoiceList[0],list):
-            #add a sibling option            
-            self.currentChoiceList.append([newName,newOption])
-        else:
-            print error
-
-    def changeName(self,newName):
-        if isinstance(currentChoiceList[0], string):
-            currentChoiceList[0] = newName
-        else:
-            print error
-
-    def changeOption(self,newOption):
-        if isinstance(currentChoiceList[0], string):
-            currentChoiceList[1] = newOption
-        else:
-            print error
-        
-    
 
 def userInput():
     try:
@@ -318,6 +263,9 @@ def editLog(state):
                         return 0
         else:
             print state.currentL.fields()
+            content = graphics.TableOfFields(state.currentL)
+            print content
+            graphics.drawWindow([ "Fields for "+state.currentL.key()],content,["Haven't actual done this proper, just press anything to move on"],["$"])
             userInput()
             break
                     
@@ -399,7 +347,7 @@ dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root
 #               [name2,[[name2a,option],[name2b,option]],
 #               [name3,option]]
 
-menu =    Choice( \
+menu =    main.Choice( \
                [["Add new log entry", addEntry], \
                 ["Add or edit a log template", \
                    [["Add log template", addNewLog], \
