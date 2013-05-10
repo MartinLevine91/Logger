@@ -96,13 +96,20 @@
 # example, t.previous(days=0) would give the midnight just gone; and
 # t.previous(hours=1, minutes=0) gives precisely one hour ago.
 
-
+bug = [
+"                            .    . ",
+"                             )  (  ",   
+"       _ _ _ _ _ _ _ _ _ _ _(.--.) ",   
+"     {{ { { { { { { { { { { ( '_') ",
+"      >>>>>>>>>>>>>>>>>>>>>>>`--'> "]
 
 import xml.etree.ElementTree as etree
 import time
-
+import json
 
 def complain(what):
+    for line in bug:
+        print line
     raise Exception(what)
 
 
@@ -284,13 +291,15 @@ class Leaf(Node):
 
 
 class Field():
-    def __init__(self, leaf, key, datatype, default=None, optional=None, help=None, hidden = False):
+    def __init__(self, leaf, key, datatype, default=None, optional=False, help=None, hidden = False):
         if not isinstance(leaf, Leaf):
             complain('Field leaf %s is not a leaf.' % (leaf,))
         elif not isinstance(key, str):
             complain('Field key %s is not a string.' % (key,))
         elif not isinstance(datatype, str):
             complain('Field datatype %s is not a string.' % (datatype,))
+        elif not validDatatype(datatype):
+            complain('Field datatype %s is not a valid datatype.' % (datatype,))
         else:
             self._leaf = leaf
             self._key = key
@@ -433,12 +442,122 @@ def now():
     return Time(time.mktime(time.localtime()))
 
 
+def validDatatype(datatype_str):
+# Datatypes should be a string of the form "['Datatypename',[listofinfofordatatype]]"
+
+    try:
+        datatype_lst = json.loads(datatype_str)
+    except:
+        return False
+    if not isinstance(datatype_lst,list):
+        return False
+    
+    elif datatype_lst[0] not in ["String","Int","Float","Range","Choice","Time"]:
+        return False
+
+    elif datatype_lst[0] in ["String","Int","Float"]:
+        return True
+
+    elif datatype_lst[0] == "Range":
+        if not isinstance(datatype_lst[1], list):
+            return False
+        elif isinstance(datatype_lst[1][0], int) and  isinstance(datatype_lst[1][1], int):
+            if datatype_lst[1][0] < datatype_lst[1][1]:
+                return True
+        return False
+    elif datatype_lst[0] == "Choice":
+        try:
+            if isinstance(choiceList,list):
+                
+                choiceList = Choice(datatype_lst[1])
+                if len(datatype_lst[1]) > 0:
+                    choiceList.pickChoice(1)
+                return True
+            else:
+                return False
+        except:
+            return False
+    elif datatype_lst[0] == "Time":
+        if datatype_lst[1] in ["Minute","Hour","Day","Month","Year"]:
+            return True
+        else:
+            return False
+    complain("Datatype validation went horribly wrong")
+
+
+
+
+class Choice:
+# List of form [[name1, option],
+#               [name2,[[name2a,option],[name2b,option]],
+#               [name3,option]]
+# list[
+
+    def __init__(self, choiceList):
+        self.choiceList = choiceList
+        self.currentChoiceList = choiceList
+        self.keyList = []
+        self.name = ""
+
+    def setOfAllChoices(self, listOfChoices = None):
+        if listOfChoices == None:
+            listOfChoices = self.choiceList
+        choiceSet = set([])
+        if not isinstance(listOfChoices, list):
+            choiceSet.add(listOfChoices)
+            return choiceSet
+        for choice in listOfChoices:
+            newSet = self.setOfAllChoices(choice[1])
+            choiceSet = choiceSet.union(newSet)
+        return choiceSet
+    
+    def updateCurrentList(self):
+        currentChoiceList = self.choiceList
+        self.name = ""
+        for key in self.keyList:
+            self.name = currentChoiceList[key][0]
+            currentChoiceList = currentChoiceList[key][1]
+        self.currentChoiceList = currentChoiceList
+        
+        
+    def pickChoice(self,key):
+        # Pick a choice, indexing from one. If currently on a leaf choice, it assumes the wanted choice is "back"        
+        if isinstance(self.currentChoiceList,list):
+            if key-1 < len(self.currentChoiceList):
+                self.keyList.append(key-1)
+            elif key-1 == len(self.currentChoiceList) and len(self.keyList) > 0:
+                self.keyList.pop()
+            self.updateCurrentList()
+        else:
+            self.keyList.pop()
+            self.updateCurrentList()
+
+    def addChoice(self,newName,newOption):
+        if isinstance(currentChoiceList[0],list):
+            #add a sibling option            
+            self.currentChoiceList.append([newName,newOption])
+        else:
+            complain("Something's wrong with a use of 'addChoice'")
+
+    def changeName(self,newName):
+        if isinstance(currentChoiceList[0], str):
+            currentChoiceList[0] = newName
+        else:
+            print error
+
+    def changeOption(self,newOption):
+        if isinstance(currentChoiceList[0], str):
+            currentChoiceList[1] = newOption
+        else:
+            print error
+
+
 def test():
     this = root('Test')
     health = this.branch('Health')
     visit = health.leaf('Toilet Visit')
-    visit.field('Solidity', 'range(0,10)', None, False, '0 for completely liquid, 10 for healthy')
-    visit.field('Gut pain', 'range(0,10)', None, False, '0 for no pain, 10 for screaming')
+    visit.field('Solidity', '["int",[]]', None, False, '0 for completely liquid, 10 for healthy')
+    visit.field('Gut pain', '["int",[]]', None, False, '0 for no pain, 10 for screaming')
     visit.entry({'Solidity': 6, 'Gut pain': 3})
     visit.entry({'Solidity': 3})
     return this
