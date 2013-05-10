@@ -14,7 +14,7 @@ STARTING SIMPLE
 
 
 import main
-
+import json
 
 WINDOW_HEIGHT = 24
 WINDOW_WIDTH = 80
@@ -23,7 +23,12 @@ def superClear():
     for i in range(WINDOW_HEIGHT*4):
         print ""
 
-
+def cutTo(string,length):
+    if len(string) > length:
+        string = string [:length]
+    elif len(string) < length:
+        string = string + " " *(length - len(string))
+    return string
 
 def drawWindow(title,content,instruction,prompt):
     """
@@ -225,8 +230,229 @@ def drawPickLog(key,state):
     drawNodeSelection(state.currentL, maxWidth,titleString,extraOptions,instructionString,prompt)
 
     
+def TableOfFields(leaf,maxWidth =WINDOW_WIDTH):
+    """
+
+         1         2         3         4         5         6         7         8
+12345678901234567890123456789012345678901234567890123456789012345678901234567890
+|##|H|Key            |Type      |*|Default       |Help                         |
+                      Range 0-10 
+                      Time Min
+                      Time Hour
+                      Time Day
+                      Time Mon
+                      Time Year
+                      Choices... 
+                      
+Min and default widths for variable width fields:
+
+
+Key: 3, 15
+Type: 4, 10
+Other: 4+8
+Default: 7, 14
+help: 4, 29
+
+
+Min = 48
+default = 80
+
+Go through Keys, Types, Defaults and Helps finding maxWidth. If maxWidth is more
+than allowed width for that column, then truncate to maxWidth, if it is less,
+distribute the extra width.
+
+
+Will break if there isn't room for K,T,O at default, D,H at min.
 
 
 
+    """
+    if not isinstance(leaf,main.Leaf):
+        main.complain("Can't make a table of fields unless you feed TableOfFields a leaf")
+
+    if maxWidth < 48:
+        main.complain("TableOfFields requires a minimum width of 48 chars to run in all cases")
+
+
+    fields = leaf.fields()
+    print "Fields", type(fields), fields
     
+    fullWidthTable = []
+
+    for field in fields:
+        if field.hidden:
+            hidden = "H"
+        else:
+            hidden = " "
+        
+        key = field.key()
+        
+        dataTypeLst =  json.loads(field.datatype)
+
+        if dataTypeLst[0] in ["String","Int","Float","Choice"]:
+            dataType = dataTypeLst[0]
+        elif dataTypeLst[0] == "Range":
+            rng = str(dataTypeLst[1][0]) + "-" + str(dataTypeLst[1][1])
+            if len(rng) < 5:
+                dataType = "Range " + rng
+            else:
+                dataType = "Rng " + rng
+        elif dataTypeLst[0] == "Time":
+            dataType = "Time " + {"Minute":"Min","Hour":"Hour","Day":"Day","Month":"Mon","Year":"Year"}[dataTypeLst[1]]
+        else:
+            main.complain("datatype processing error, Table of fields")
+
+        optional = field.optional
+        print optional
+        if optional:
+            optional = "*"
+        else:
+            optional = " "
+
+        default = field.default
+        if default == None:
+            default = ""
+        
+        fieldHelp = field.help
+        if fieldHelp == None:
+            fieldHelp = ""
+        longRow = [hidden,key,dataType,optional,default,fieldHelp]
+        fullWidthTable.append(longRow)
+    """
+Finding col widths...
+
+M = max
+m = min
+D = default
+
+#+ >= #
+
+K,T,D,H = M,M,M,M
+K,T,D,H = M,M,D+,D+
+K,T,D,H = D+,M,D,D
+K,T,D,H = D,M,m+,m+
+K,T,D,H = D,D+,m,m
+K,T,D,H = D,D,m,m
+
+
+find, m, M, D for K,T,D,H
+set m < D,M  (this is done through starting vals for maxLen
+set M >= D, lower D to M otherwise
+
+>= M,M,M,M = M,M,M,M
+elif >= M,M,D,D = M,M,D+,D+
+>=
+
+    """
+    minLenKey = 3
+    minLenType = 4
+    minLenDef = 7
+    minLenHelp = 4
+
+    defLenKey = 15
+    defLenType = 10
+    defLenDef = 14
+    defLenHelp = 29
+
+    maxLenKey = minLenKey
+    maxLenType = minLenType
+    maxLenDef = minLenDef
+    maxLenHelp = minLenHelp
+    
+    for longRow in fullWidthTable:
+        maxLenKey = max(maxLenKey, len(longRow[1]))
+        maxLenType = max(maxLenType, len(longRow[2]))                        
+        maxLenDef = max(maxLenDef, len(longRow[4]))
+        maxLenHelp = max(maxLenHelp, len(longRow[5]))
+
+    defLenKey = min(defLenKey,maxLenKey)
+    defLenType = min(defLenType,maxLenType)
+    defLenDef = min(defLenDef,maxLenDef)
+    defLenHelp = min(defLenHelp,defLenHelp)
+
+    # K,T,D,H = M,M,M,M
+    if maxWidth >= (maxLenKey + maxLenType + maxLenDef + maxLenHelp + 12):
+        keyLen = maxLenKey
+        typeLen = maxLenType
+        defLen = maxLenDef
+        helpLen = maxLenHelp
+
+    # K,T,D,H = M,M,D+,D+
+    elif maxWidth >= (maxLenKey + maxLenType + defLenDef + defLenHelp + 12):
+        keyLen = maxLenKey
+        typeLen = maxLenType
+        spareLen = maxWidth - 12 -keyLen - typeLen
+        defLen = spareLen/3
+        helpLen = spareLen - defLen
+        if defLen > maxLenDef:
+            defLen = maxLenDef
+            helpLen = spareLen - defLen
+        elif helpLen > maxLenHelp:
+            helpLen = maxLenHelp
+            defLen = spareLen - helpLen
+
+    # K,T,D,H = D+,M,D,D
+    elif maxWidth >= (defLenKey + maxLenType + defLenDef + defLenHelp + 12):
+        typeLen = maxLenType
+        defLen = defLenDef
+        helpLen = defHelpLen
+        keyLen = maxWidth - typeLen - defLen - helpLen - 12
+
+    # K,T,D,H = D,M,m+,m+
+    elif maxWidth >= (defLenKey + maxLenType + minLenDef + minLenHelp + 12):
+        keyLen = defLenKey
+        typeLen = maxLenType
+        spareLen = maxWidth - 12 -keyLen - typeLen
+
+        if spareLen/3 < minLenDef:
+            defLen = minLenDef
+            helpLen = spareLen - defLen
+        else:
+            defLen = spareLen/3
+            helpLen = spareLen-defLen
+
+    # K,T,D,H = D,D+,m,m
+    elif maxWidth >= (defLenKey + defLenType + minLenDef + minLenHelp + 12):
+        keyLen = defLenKey
+        helpLen = minLenHelp
+        defLen = minLenDef
+        typeLen = maxWidth - keyLen - helpLen - defLen - 12
+
+    #cut columns to width and form table with each row as a string
+
+    titleRow = "|##|H|%s|%s|*|%s|%s|" % (cutTo("Key",keyLen),cutTo("Type",typeLen), \
+                                        cutTo("Default",defLen),cutTo("Help",helpLen))
+
+    fieldTable = []
+    fieldTable.append(titleRow)
+    for i in range(len(fullWidthTable)):
+        #longRow = [hidden,key,dataType,optional,default,fieldHelp]
+        #|##|H|Key            |Type      |*|Default       |Help     |
+        longRow = fullWidthTable[i]
+        
+        rowStr = "|"
+        
+        i_str = str(i)
+        if len(i_str) == 1:
+            i_str = "0" + i_str
+
+        # Field number        
+        rowStr += i_str + "|"
+        # Hidden?
+        rowStr += longRow[0] + "|"
+        # Key
+        rowStr += cutTo(longRow[1],keyLen) + "|"
+        # Type
+        rowStr += cutTo(longRow[2],typeLen) + "|"
+        # Optional
+        rowStr += longRow[3] + "|"
+        # Default
+        rowStr += cutTo(longRow[4],defLen) + "|"
+        # Help 
+        rowStr += cutTo(longRow[5],helpLen) + "|"
+
+        fieldTable.append(rowStr)
+    
+    return fieldTable
+        
 
