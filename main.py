@@ -366,6 +366,7 @@ class Field():
         field.optional = field.optional == 'yes'
         return field
 
+
 def read(file):
     class Entry:
         @classmethod
