@@ -336,8 +336,6 @@ def askConfirmString(key):
 # RUN - ACTUAL                                                                 #
 ################################################################################
 
-menu = main.read("Menu.xml")
-
 logs = main.read("Logs.xml")
 
 dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root,"timeStamp":"fish"}
