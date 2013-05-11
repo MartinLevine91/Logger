@@ -349,8 +349,9 @@ class Field():
     def xml(self):
         xml = etree.Element('Field', {'key': self._key, 'datatype': self.datatype})
         if self.optional:
-            xml.set('optional', True)
-            xml.set('default', self.default)
+            xml.set('optional', 'yes')
+            if self.default:
+                xml.set('default', self.default)
         if self.help:
             xml.set('help', self.help)
         return xml
@@ -361,8 +362,9 @@ class Field():
         def get(k):
             if k in attrib:
                 return attrib[k]
-        return parent.field(*(map(get,('key', 'datatype', 'default', 'optional', 'help'))))
-
+        field = parent.field(*(map(get,('key', 'datatype', 'default', 'optional', 'help'))))
+        field.optional = field.optional == 'yes'
+        return field
 
 def read(file):
     class Entry:
