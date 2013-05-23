@@ -84,6 +84,7 @@ User input: "4"
 
 import main
 import graphics
+import json
 
 
 def selectNodeChild(current,userIn):
@@ -141,6 +142,8 @@ def userInput():
                 pass
     except:
         userIn = None
+    if isinstance(userIn, str) and userIn.lower() == "kill program":
+        main.complain("Got kill request")
     return userIn
 
 
@@ -249,6 +252,7 @@ def moveLog(state):
 def editLog(state):
     while True:
         if not isinstance(state.currentL, main.Leaf):
+            #If a log template hasn't already been selected, navigate to one.        
             if state.currentL == None:
                 state.currentL = state.logs
             graphics.drawPickLog("EditLog",state)
@@ -262,14 +266,64 @@ def editLog(state):
                         state.currentL = state.logs
                         return 0
         else:
-            print state.currentL.fields()
-            content = graphics.TableOfFields(state.currentL)
-            print content
-            graphics.drawWindow([ "Fields for "+state.currentL.key()],content,["Haven't actual done this proper, just press anything to move on"],["$"])
-            userInput()
+            #Give options to add or edit a field.
+            while True:
+                
+                content = graphics.TableOfFields(state.currentL)
+                instructions = graphics.splitToWidth(
+                    "Pick a current field by entering it's number, start a new field by entering 'N' or 'new' or press enter 'B' or 'Back' to stop editing fields."
+                    )
+                graphics.drawWindow([ "Fields for "+state.currentL.key()],content,instructions,["$"])
+                UI = userInput()
+                if isinstance(UI, int):
+                    if UI >= 0 and UI < len(state.currentL.fields()):
+                        editField(graphics.TableOfFields(state.currentL),state.currentL.fields()[UI])
+                    else:
+                        content = graphics.TableOfFields(state.currentL)
+                        instructions = graphics.splitToWidth(
+                            "Pick a current field by entering it's number, start a new field by entering 'N' or 'new' or press enter 'B' or 'Back' to stop editing fields."
+                            )
+                        graphics.drawWindow([ "Fields for "+state.currentL.key()],content,instructions,["$"])
+                        UI = userInput()
+                elif isinstance(UI, str):
+                    if UI.lower() in ["b", "back"]:
+                        return 0
+                    elif UI.lower() in ["n","new"]:
+                        editField()
+                
+                
             break
                     
             
+    graphics.drawNotYetProgrammed()
+    userInput()
+    return 0
+
+def editField(fieldsTable,field = None):
+
+#        key,dataType,default,optional,helpStr,hidden = fieldAsTable
+    print field.default
+    key = None
+    datatype = None
+    hidden = None
+    optional = None
+    default = None
+    helpStr = None
+
+    if field != None:
+        key = field.key()
+        datatype = field.datatype
+        hidden = field.hidden
+        optional = field.optional
+        default = field.default
+        helpStr = field.help
+    
+    
+    while True:
+        fieldTable = graphics.drawField(None,[key,datatype,default,optional,helpStr,hidden])
+        graphics.drawWindow(["A field to edit"],fieldsTable,fieldTable,["$ "])        
+        UI = userInput()
+        break
     graphics.drawNotYetProgrammed()
     userInput()
     return 0
@@ -329,16 +383,49 @@ def askConfirmString(key):
                 if UI.lower() in ["n","no"]:
                     progress = "ask"
                 
-        
+
+def getData(dataType_str,title,content):
+    dataFunctionDict = {
+        "String":getString,
+        "Int":getInt,
+        "Float":getFloat,
+        "Range":getRange,
+        "Choice":getChoice,
+        "Time":getTime}
+
+    if not main.validDatatype(dataType_str):
+        main.complain("Invalid data type, cannot get data.")
+    else:
+        dataType = json.loads(datatype_str)
+        return dataFunctionDict[dataType[0]](title, content,dataType)
+
+
+
+    
+
+def getString(title, content,dataType):
+    
+
+    pass
+def getInt(title, content,dataType):
+    pass
+def getFloat(title, content,dataType):
+    pass
+def getRange(title, content,dataType):
+    pass
+def getChoice(title, content,dataType):
+    pass
+def getTime(title, content,dataType):
+    pass
 
 
 ################################################################################
 # RUN - ACTUAL                                                                 #
 ################################################################################
 
+
 logs = main.read("Logs.xml")
 
-dataTypes = {"integer": int,"float": float, "range:": tuple, "choice": main.Root,"timeStamp":"fish"}
 
 
 # List of form [[name1, option],
