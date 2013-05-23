@@ -162,7 +162,7 @@ def splitToWidth(longStr,maxWidth = WINDOW_WIDTH):
     while len(longStr) > maxWidth:
         strList.append(longStr[:maxWidth])
         longStr = longStr[maxWidth:]
-    strList.append(longStr)
+    strList.append(longStr + " " * (maxWidth-len(longStr)))
     return strList
 
 
@@ -287,24 +287,24 @@ Will break if there isn't room for K,T,O at default, D,H at min.
         
         key = field.key()
         
-        dataTypeLst =  json.loads(field.datatype)
+        dataTypeList =  json.loads(field.datatype)
 
-        if dataTypeLst[0] in ["String","Int","Float","Choice"]:
-            dataType = dataTypeLst[0]
-        elif dataTypeLst[0] == "Range":
-            rng = str(dataTypeLst[1][0]) + "-" + str(dataTypeLst[1][1])
+        if dataTypeList[0] in ["String","Int","Float","Choice"]:
+            dataType = dataTypeList[0]
+        elif dataTypeList[0] == "Range":
+            rng = str(dataTypeList[1][0]) + "-" + str(dataTypeList[1][1])
             if len(rng) < 5:
                 dataType = "Range " + rng
             else:
                 dataType = "Rng " + rng
-        elif dataTypeLst[0] == "Time":
+        elif dataTypeList[0] == "Time":
             dataType = "Time " + {"Minute":"Min","Hour":"Hour","Day":"Day","Month":"Mon","Year":"Year"}[dataTypeLst[1]]
         else:
             main.complain("datatype processing error, Table of fields")
 
         optional = field.optional
         print optional
-        if optional:
+        if not optional:
             optional = "*"
         else:
             optional = " "
@@ -456,3 +456,84 @@ elif >= M,M,D,D = M,M,D+,D+
     return fieldTable
         
 
+def drawField(field, fieldAsTable = None, maxWidth = WINDOW_WIDTH,maxHeight = 8):
+    """
+Draws a field in 8 lines (or more)
+1   Key:
+2   Type:
+3   Type data:
+4   Hidden:     Optional:
+5   Default:
+6   Help:   
+7
+8   
+key,datatype,hidden,optional,help
+
+
+"
+
+    """
+    if field != None:
+        key = field.key()
+        datatype = field.datatype
+        hidden = field.hidden
+        optional = field.optional
+        default = field.default
+        helpStr= field.help
+
+
+        if key == None:
+            key = "..."
+        if datatype == None:
+            datatype = '["...","..."]'
+        if helpStr == None:
+            helpStr = "..."
+        if default == None:
+            default = "..."
+    else:
+        key,datatype,default,optional,helpStr,hidden = fieldAsTable
+        
+
+
+    
+    fieldList= []
+    fieldList += splitToWidth("Key: " + key, maxWidth)
+    datatypeList =  json.loads(datatype)
+    fieldList += splitToWidth("Type: " + datatypeList[0], maxWidth)
+    fieldList += splitToWidth("Type data not yet included", maxWidth)
+    lenH = maxWidth/2
+    lenO = maxWidth - lenH
+    
+    if hidden == True:
+        hStr = "T"
+    elif hidden == False:
+        hStr = "F"
+    elif hidden == None:
+        hStr = "?"
+    
+    if optional == True:
+        oStr = "T"
+    elif optional == False:
+        oStr = "F"
+    elif optional == None:
+        oStr = "?"
+   
+    
+    HO_str = splitToWidth("Hidden: " + hStr,lenH )[0] + splitToWidth(" Optional: " + oStr,lenO)[0]
+    fieldList.append(HO_str)
+
+    if optional:
+        fieldList += splitToWidth("Default: " + str(default))
+
+    helpList = ["Help: "] + splitToWidth('"' + helpStr, maxWidth)
+
+    fieldList += helpList
+    fieldList = fieldList[:maxHeight]
+    fieldList[-1] = fieldList[-1][:-1] + '"'
+
+    return fieldList
+    
+
+
+
+                                  
