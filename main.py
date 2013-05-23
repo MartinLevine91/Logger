@@ -98,8 +98,8 @@
 
 bug = [
 "                            .    . ",
-"                             )  (  ",   
-"       _ _ _ _ _ _ _ _ _ _ _(.--.) ",   
+"                             )  (  ",
+"       _ _ _ _ _ _ _ _ _ _ _(.--.) ",
 "     {{ { { { { { { { { { { ( '_') ",
 "      >>>>>>>>>>>>>>>>>>>>>>>`--'> "]
 
@@ -311,7 +311,7 @@ class Field():
             self.optional = optional
             # currently a shortish string, might add more text, images or whatever later
             self.help = help
-            # true or false            
+            # true or false
             self.hidden = hidden
 
     def __repr__(self):
@@ -350,8 +350,9 @@ class Field():
         xml = etree.Element('Field', {'key': self._key, 'datatype': self.datatype})
         if self.optional:
             xml.set('optional', 'yes')
+        else:
             if self.default:
-                xml.set('default', self.default)
+                xml.set('default', '%s' % self.default)
         if self.help:
             xml.set('help', self.help)
         return xml
@@ -456,7 +457,7 @@ def validDatatype(datatype_str):
         return False
     if not len(datatype_lst) == 2:
         return False
-    
+
     elif datatype_lst[0] not in ["String","Int","Float","Range","Choice","Time"]:
         return False
 
@@ -473,7 +474,7 @@ def validDatatype(datatype_str):
     elif datatype_lst[0] == "Choice":
         try:
             if isinstance(choiceList,list):
-                
+
                 choiceList = Choice(datatype_lst[1])
                 if len(datatype_lst[1]) > 0:
                     choiceList.pickChoice(1)
@@ -517,7 +518,7 @@ class Choice:
             newSet = self.setOfAllChoices(choice[1])
             choiceSet = choiceSet.union(newSet)
         return choiceSet
-    
+
     def updateCurrentList(self):
         currentChoiceList = self.choiceList
         self.name = ""
@@ -525,10 +526,10 @@ class Choice:
             self.name = currentChoiceList[key][0]
             currentChoiceList = currentChoiceList[key][1]
         self.currentChoiceList = currentChoiceList
-        
-        
+
+
     def pickChoice(self,key):
-        # Pick a choice, indexing from one. If currently on a leaf choice, it assumes the wanted choice is "back"        
+        # Pick a choice, indexing from one. If currently on a leaf choice, it assumes the wanted choice is "back"
         if isinstance(self.currentChoiceList,list):
             if key-1 < len(self.currentChoiceList):
                 self.keyList.append(key-1)
@@ -541,7 +542,7 @@ class Choice:
 
     def addChoice(self,newName,newOption):
         if isinstance(self.currentChoiceList[0],list):
-            #add a sibling option            
+            #add a sibling option
             self.currentChoiceList.append([newName,newOption])
         else:
             complain("Something's wrong with a use of 'addChoice'")
@@ -562,19 +563,4 @@ Change them to function on level above, using a key.
             self.currentChoiceList[key-1][1] = newOption
         else:
             complain("Invalid call of Choice.changeOption")
-
-
-def test():
-    this = root('Test')
-    health = this.branch('Health')
-    visit = health.leaf('Toilet Visit')
-    visit.field('Solidity', '["int",[]]', None, False, '0 for completely liquid, 10 for healthy')
-    visit.field('Gut pain', '["int",[]]', None, False, '0 for no pain, 10 for screaming')
-    visit.entry({'Solidity': 6, 'Gut pain': 3})
-    visit.entry({'Solidity': 3})
-    return this
-
-
-
-
 
