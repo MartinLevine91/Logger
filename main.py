@@ -454,6 +454,8 @@ def validDatatype(datatype_str):
         return False
     if not isinstance(datatype_lst,list):
         return False
+    if not len(datatype_lst) == 2:
+        return False
     
     elif datatype_lst[0] not in ["String","Int","Float","Range","Choice","Time"]:
         return False
@@ -493,8 +495,10 @@ def validDatatype(datatype_str):
 class Choice:
 # List of form [[name1, option],
 #               [name2,[[name2a,option],[name2b,option]],
-#               [name3,option]]
-# list[
+#               [name3, option]]
+# When used as a datatype, the stored answer will be an
+# the final name-key. The options on leaves will automatically
+# be set to their name-key.
 
     def __init__(self, choiceList):
         self.choiceList = choiceList
@@ -536,23 +540,28 @@ class Choice:
             self.updateCurrentList()
 
     def addChoice(self,newName,newOption):
-        if isinstance(currentChoiceList[0],list):
+        if isinstance(self.currentChoiceList[0],list):
             #add a sibling option            
             self.currentChoiceList.append([newName,newOption])
         else:
             complain("Something's wrong with a use of 'addChoice'")
 
-    def changeName(self,newName):
-        if isinstance(currentChoiceList[0], str):
-            currentChoiceList[0] = newName
-        else:
-            print error
+#These two need fixing!!
+    """
+Change them to function on level above, using a key.
 
-    def changeOption(self,newOption):
-        if isinstance(currentChoiceList[0], str):
-            currentChoiceList[1] = newOption
+    """
+    def changeName(self,key,newName):
+        if isinstance(self.currentChoiceList[0], list) and key-1 < len(self.currentChoiceList):
+            self.currentChoiceList[key-1][0] = newName
         else:
-            print error
+            complain("Invalid call of Choice.changeName")
+
+    def changeOption(self,key, newOption):
+        if isinstance(self.currentChoiceList[0], list) and key-1 < len(self.currentChoiceList):
+            self.currentChoiceList[key-1][1] = newOption
+        else:
+            complain("Invalid call of Choice.changeOption")
 
 
 def test():
