@@ -139,7 +139,7 @@ def userInput():
             try:
                 userIn = str(userIn)
             except:
-                pass
+                userIn = None
     except:
         userIn = None
     if isinstance(userIn, str) and userIn.lower() == "kill program":
@@ -289,7 +289,7 @@ def editLog(state):
                     if UI.lower() in ["b", "back"]:
                         return 0
                     elif UI.lower() in ["n","new"]:
-                        editField()
+                        editField(graphics.TableOfFields(state.currentL))
                 
                 
             break
@@ -301,28 +301,71 @@ def editLog(state):
 
 def editField(fieldsTable,field = None):
 
-#        key,dataType,default,optional,helpStr,hidden = fieldAsTable
-    print field.default
+#        key,[dataType ,typeDate],default,optional,helpStr,hidden = fieldAsTable
     key = None
     datatype = None
-    hidden = None
+    typeData = None
     optional = None
     default = None
     helpStr = None
+    hidden = False
+
 
     if field != None:
         key = field.key()
-        datatype = field.datatype
+
+        datatype_str = field.datatype
+        datatype_lst = json.loads(datatype_str)
+        
+        datatypeList = json.loads(datatype_str)
+        datatype = datatypeList[0]
+        typeData = datatypeList[1]
         hidden = field.hidden
         optional = field.optional
         default = field.default
         helpStr = field.help
     
+    nextToEdit = "key"
+
+    inst_whatNext = graphics.splitToWidth(inst_str_whatNext,graphics.WINDOW_WIDTH)
+
     
+
+
     while True:
-        fieldTable = graphics.drawField(None,[key,datatype,default,optional,helpStr,hidden])
-        graphics.drawWindow(["A field to edit"],fieldsTable,fieldTable,["$ "])        
+        fieldTable = graphics.drawField(None,[key,datatype,typeData,default,optional,helpStr,hidden])
+        fullContent = fieldsTable + ["-" * graphics.WINDOW_WIDTH] + fieldTable
+
+        
+        inst_whatNext = graphics.splitToWidth(inst_str_whatNext,graphics.WINDOW_WIDTH)
+        if dataType in ["Range","Time","Choice"]:
+            
+
+
+#User inputs, if they input None, then do this.
+        
+
+        if key == None:
+            nextToEdit = "key"
+        elif datatype == None:
+            nextToEdit = "datatype"
+        elif datatype in ["Range","Time","Choice"] and typeData == None:
+            nextToEdit = "type data"
+        elif hidden == None:
+            nextToEdit = "hidden"
+        elif optional == None:
+            nextToEdit = "optional"
+        elif optional == True and default == None:
+            nextToEdit = "default"
+        elif helpStr == None:
+            nextToEdit = "help"
+
+
+        
+        graphics.drawWindow(["A field to edit"],fullContent,inst_whatNext,["$ "])        
         UI = userInput()
+
+        
         break
     graphics.drawNotYetProgrammed()
     userInput()
