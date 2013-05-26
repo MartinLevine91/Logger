@@ -350,11 +350,12 @@ class Field():
         xml = etree.Element('Field', {'key': self._key, 'datatype': self.datatype})
         if self.optional:
             xml.set('optional', 'yes')
-        else:
-            if self.default:
-                xml.set('default', '%s' % self.default)
+        if self.default:
+            xml.set('default', '%s' % self.default)
         if self.help:
             xml.set('help', self.help)
+        if self.hidden:
+            xml.set('hidden', 'yes')
         return xml
 
     @classmethod
@@ -365,6 +366,7 @@ class Field():
                 return attrib[k]
         field = parent.field(*(map(get,('key', 'datatype', 'default', 'optional', 'help'))))
         field.optional = field.optional == 'yes'
+        field.hidden = field.hidden == 'yes'
         return field
 
 
