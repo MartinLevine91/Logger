@@ -302,17 +302,20 @@ Will break if there isn't room for K,T,O at default, D,H at min.
         else:
             main.complain("datatype processing error, Table of fields")
 
-        optional = field.optional
-        print optional
-        if not optional:
-            optional = "*"
-        else:
-            optional = " "
-
         default = field.default
         if default == None:
             default = ""
-        
+
+        optional = field.optional
+              
+        if not optional:
+            optional = "*"
+            default = ""
+        else:
+            optional = " "
+
+
+      
         fieldHelp = field.help
         if fieldHelp == None:
             fieldHelp = ""
@@ -476,34 +479,56 @@ key,datatype,hidden,optional,help
     if field != None:
         key = field.key()
         datatype = field.datatype
+        datatypeList =  json.loads(datatype)
+
         hidden = field.hidden
         optional = field.optional
         default = field.default
         helpStr= field.help
 
 
-        if key == None:
-            key = "..."
-        if datatype == None:
-            datatype = '["...","..."]'
-        if helpStr == None:
-            helpStr = "..."
-        if default == None:
-            default = "..."
     else:
-        key,datatype,default,optional,helpStr,hidden = fieldAsTable
-        
+        key,datatype,typeData,default,optional,helpStr,hidden = fieldAsTable
+        datatypeList = [datatype,typeData]
+
+    if key == None:
+        key = "..."
+    if datatype == None:
+        datatype = '["...","..."]'
+    if helpStr == None:
+        helpStr = "..."
+    if default == None:
+        default = "..."
 
 
+
+    firstHalf = maxWidth/2
+    secondHalf = maxWidth - firstHalf
     
     fieldList= []
     fieldList += splitToWidth("Key: " + key, maxWidth)
-    datatypeList =  json.loads(datatype)
+
     fieldList += splitToWidth("Type: " + datatypeList[0], maxWidth)
-    fieldList += splitToWidth("Type data not yet included", maxWidth)
-    lenH = maxWidth/2
-    lenO = maxWidth - lenH
+
+    if datatypeList[0] not in ['Range','Choice','Time']:
+        fieldList += splitToWidth("No type data.",maxWidth)
+                
+    elif datatypeList[0] == 'Range':
+        typeDataStr = cutTo("Min: " + str(datatypeList[1][0]),firstHalf) + \
+                      cutTo("Max: " + str(datatypeList[1][1]),secondHalf)
+        fieldList.append(typeDataStr)
+    elif datatypeList[0] == 'Choice':
+        choices = main.Choice(datatypeList[1])
+        typeDataStr = "Choices: " + str(choices.setOfAllChoices())[len("set(["):-len('])')]
+        if len(typeDataStr) > maxWidth:
+            typeDataStr = typeDataStr[:-3] + "..."
+        fieldList.append(typeDataStr)
+    elif datatypeList[0] == 'Time':
+        fieldList += splitToWidth("Accurate to the nearest: " + datatypeList[1])
     
+
+    
+
     if hidden == True:
         hStr = "T"
     elif hidden == False:
@@ -519,7 +544,7 @@ key,datatype,hidden,optional,help
         oStr = "?"
    
     
-    HO_str = splitToWidth("Hidden: " + hStr,lenH )[0] + splitToWidth(" Optional: " + oStr,lenO)[0]
+    HO_str = cutTo("Hidden: " + hStr,firstHalf ) + cutTo(" Optional: " + oStr,secondHalf)
     fieldList.append(HO_str)
 
     if optional:
