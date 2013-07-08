@@ -486,7 +486,7 @@ def validDatatype(datatype_str):
         except:
             return False
     elif datatype_lst[0] == "Time":
-        if datatype_lst[1] in ["Minute","Hour","Day","Month","Year"]:
+        if datatype_lst[1][0] in ["Minute","Hour","Day","Month","Year"]:
             return True
         else:
             return False
