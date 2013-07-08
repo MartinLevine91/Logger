@@ -138,6 +138,8 @@ def userInput():
         except:
             try:
                 userIn = str(userIn)
+                if userIn == "":
+                    userIn = None
             except:
                 userIn = None
     except:
@@ -277,11 +279,11 @@ def editLog(state):
                 UI = userInput()
                 if isinstance(UI, int):
                     if UI >= 0 and UI < len(state.currentL.fields()):
-                        editField(graphics.TableOfFields(state.currentL),state.currentL.fields()[UI])
+                        editField(currentL,state.currentL.fields()[UI])
                     else:
                         content = graphics.TableOfFields(state.currentL)
                         instructions = graphics.splitToWidth(
-                            "Pick a current field by entering it's number, start a new field by entering 'N' or 'new' or press enter 'B' or 'Back' to stop editing fields."
+                            "Pick a current field by entering its number, start a new field by entering 'N' or 'new' or press enter 'B' or 'Back' to stop editing fields."
                             )
                         graphics.drawWindow([ "Fields for "+state.currentL.key()],content,instructions,["$"])
                         UI = userInput()
@@ -299,7 +301,9 @@ def editLog(state):
     userInput()
     return 0
 
-def editField(fieldsTable,field = None):
+def editField(currentL,field = None):
+
+
 
 #        key,[dataType ,typeDate],default,optional,helpStr,hidden = fieldAsTable
     key = None
@@ -325,25 +329,32 @@ def editField(fieldsTable,field = None):
         default = field.default
         helpStr = field.help
     
-    nextToEdit = "key"
+    nextToEdit = "help"
 
-    inst_whatNext = graphics.splitToWidth(inst_str_whatNext,graphics.WINDOW_WIDTH)
 
     
 
 
     while True:
+        
+        fieldsTable = graphics.TableOfFields(state.currentL, graphics.WINDOW_WIDTH, field, [key,datatype,typeData,default,optional,helpStr,hidden])
+
         fieldTable = graphics.drawField(None,[key,datatype,typeData,default,optional,helpStr,hidden])
         fullContent = fieldsTable + ["-" * graphics.WINDOW_WIDTH] + fieldTable
 
-        
-        inst_whatNext = graphics.splitToWidth(inst_str_whatNext,graphics.WINDOW_WIDTH)
-        if dataType in ["Range","Time","Choice"]:
+        thingsToEdit = ["key","datatype","type data","hidden","optional","default","help"]
+        if nextToEdit in thingsToEdit:
+            i = thingsToEdit.index(nextToEdit)
+            i = (i+1)%(len(thingsToEdit))
+            nextToEdit = thingsToEdit[i]
+            if nextToEdit == "type data":
+                if datatype not in ["Range","Time","Choice"]:
+                   nextToEdit = "hidden"     
+            if nextToEdit == "default":
+                if optional == False:
+                   nextToEdit = "help"
             
 
-
-#User inputs, if they input None, then do this.
-        
 
         if key == None:
             nextToEdit = "key"
@@ -362,11 +373,216 @@ def editField(fieldsTable,field = None):
 
 
         
-        graphics.drawWindow(["A field to edit"],fullContent,inst_whatNext,["$ "])        
-        UI = userInput()
+
+
+
+        inst_str_whatNext  = "Either pick an option or press enter with the input blank to edit %s next." %(nextToEdit,)
+
+        inst_whatNext = graphics.splitToWidth(inst_str_whatNext,graphics.WINDOW_WIDTH)
+
+        shift = [0,0]
+        
+        inst_whatNext += [graphics.cutTo(str(1) + ". Key",graphics.WINDOW_WIDTH)]
+        inst_whatNext += [graphics.cutTo(str(2) + ". Datatype",graphics.WINDOW_WIDTH)]
+        if datatype in ["Range","Time","Choice"]:
+            shift[0]= 1
+            inst_whatNext += [graphics.cutTo(str(3) + ". Type data",graphics.WINDOW_WIDTH)]
+        inst_whatNext += [graphics.cutTo(str(3 + shift[0]) + ". Hidden",graphics.WINDOW_WIDTH)]
+        inst_whatNext += [graphics.cutTo(str(4 + shift[0]) + ". Optional",graphics.WINDOW_WIDTH)]
+
+        if optional == True:
+            shift[1] = 1
+            inst_whatNext += [graphics.cutTo(str(5+ shift[0]) + ". Default",graphics.WINDOW_WIDTH)]
+        inst_whatNext += [graphics.cutTo(str(5 + shift[0] +shift[1]) + ". Help",graphics.WINDOW_WIDTH)]
+
+        inst_whatNext += [graphics.cutTo("Alternatively, enter 'Done' to save and quit or 'Cancel to quit without saving.",graphics.WINDOW_WIDTH)]
+#User inputs, if they input None, then do this.
 
         
-        break
+        maxLenFieldsTable = graphics.WINDOW_HEIGHT - len(inst_whatNext) - len(fieldTable) - 6
+        if maxLenFieldsTable > 1:
+            fullContent = fieldsTable[:maxLenFieldsTable] + ["-" * graphics.WINDOW_WIDTH] + fieldTable
+        else:
+            fullContent = fieldTable
+
+
+        
+        graphics.drawWindow(["Editing field '%s'" %(key,)],fullContent,inst_whatNext,["$ "])        
+        UI = userInput()
+
+        getNewInput = False
+        if isinstance(UI, str):
+            if UI.lower() in ["done","d"]:
+                graphics.drawNotYetProgrammed()
+                userInput()
+                return 0
+            if UI.lower() in ["cancel","c"]:
+                return 0
+            else:
+                getNewInput = True
+        elif isinstance(UI, int):
+            if UI > 0 and UI <= (6 + shift[0] + shift[1]):
+                if shift[0] == 0 and shift[1] == 0:
+                    nextToEdit = ["key","datatype","hidden","optional","help"][UI-1]
+                elif shift[0] == 1 and shift[1] == 0:
+                    nextToEdit = ["key","datatype","type data","hidden","optional","help"][UI-1]
+                elif shift[0] == 0 and shift[1] == 1:
+                    nextToEdit = ["key","datatype","hidden","optional","default","help"][UI-1]
+                elif shift[0] == 1 and shift[1] == 1:
+                    nextToEdit = ["key","datatype","type data","hidden","optional","default","help"][UI-1]
+                else:
+                    getNewInput = True
+        elif UI != None:
+            getNewInput = True
+
+
+        print getNewInput
+        print nextToEdit
+        if not getNewInput:
+            if nextToEdit == "key":
+                
+                cont = True
+                while cont:
+                    inst_string = "Enter new key, or press enter leaving the input blank to leave the key as it was." 
+                    inst = graphics.splitToWidth(inst_string,graphics.WINDOW_WIDTH)
+                    maxLenFieldTable = graphics.WINDOW_HEIGHT - len(inst) - 5
+                    fullContent = fieldTable[:maxLenFieldTable]
+
+                    graphics.drawWindow(["Editing key for field '%s'" %(key,)],fullContent,inst,["$"])
+                    UI = userInput()
+                    print "UI: ", UI 
+                    if isinstance(UI, str):
+                        key = UI
+                        cont = False
+                    elif UI == None:
+                        if key == None:
+                            while True:
+                                graphics.askYesNo("Do you wish to leave the key blank? If you do so you won't be able to save the field")
+                                UI = userInput()
+                                if isinstance(UI,str):
+                                    if UI.lower() in ["y","yes"]:
+                                        cont = False
+                                        break
+                                    if UI.lower() in ["n","no"]:
+                                        break
+                        else:
+                            cont = False
+            elif nextToEdit == "datatype":
+                cont = True
+                inst_string_1 = "Choose from the following options for datatype:"
+                inst = graphics.splitToWidth(inst_string_1,graphics.WINDOW_WIDTH)
+                typeList = ["String","Int","Float","Range","Choice","Time"]
+                for i in range(len(typeList)):
+                    inst.append(graphics.cutTo((str(i+1) + ". " + typeList[i]),graphics.WINDOW_WIDTH))
+                inst_string_2 = "Alternatively press enter leaving the input blank to leave datatype as it was."
+                inst = inst + graphics.splitToWidth(inst_string_2,graphics.WINDOW_WIDTH)
+
+                maxLenFieldTable = graphics.WINDOW_HEIGHT - len(inst) - 5
+                fullContent = fieldTable[:maxLenFieldTable]
+
+                while cont:
+                                
+                    graphics.drawWindow(["Picking datatype for field '%s'" %(key,)],fullContent,inst,["$"])
+                    UI = userInput()
+                    if isinstance(UI, int):
+                        if UI > 0 and UI <= len(typeList):
+                            if typeList[UI-1] != datatype:
+                                datatype = typeList[UI-1]
+                                typeData = None
+                            cont = False
+                    elif UI == None:
+                        if datatype == None:
+                            while True:
+                                graphics.askYesNo("Do you wish to leave the datatype blank? If you do so you won't be able to save the field")
+                                UI = userInput()
+                                if isinstance(UI,str):
+                                    if UI.lower() in ["y","yes"]:
+                                        cont = False
+                                        break
+                                    if UI.lower() in ["n","no"]:
+                                        break
+                        else:
+                            cont = False         
+            elif nextToEdit == "type data":
+                print "Here"
+                if datatype == "Range":
+                    if typeData == None:
+                        rMin = "?"
+                        rMax = "?"
+                    else:
+                        print typeData
+                        rMin, rMax = typeData
+                        
+                    cont = "min"
+                    while True:
+                        if cont == "min":
+                            instStr = "Enter the minimum value for the range or press enter leaving the input blank to leave it as is."
+                            inst = graphics.splitToWidth(instStr,graphics.WINDOW_WIDTH)
+                            
+                            maxLenFieldTable = graphics.WINDOW_HEIGHT - len(inst) - 5
+                            fullContent = fieldTable[:maxLenFieldTable]
+
+                            graphics.drawWindow(["Setting minimum for field '%s'" %(key,)],fullContent,inst,["$"])
+                            UI = userInput()
+                            if isinstance(UI, int):
+                                rMin = UI
+                                if isinstance(rMax, int):
+                                    typeData = [rMin,rMax]
+                                else:
+                                    typeData = [rMin,"?"]
+                                cont = "max"
+                            elif isinstance(UI, None):
+                                cont = "max"
+                        if cont == "max":
+                            instStr = "Enter the maximum value for the range or press enter leaving the input blank to leave it as is."
+                            inst = graphics.splitToWidth(instStr,graphics.WINDOW_WIDTH)
+                            
+                            maxLenFieldTable = graphics.WINDOW_HEIGHT - len(inst) - 5
+                            fullContent = fieldTable[:maxLenFieldTable]
+
+                            graphics.drawWindow(["Setting maximum for field '%s'" %(key,)],fullContent,inst,["$"])
+                            UI = userInput()
+                            if isinstance(UI, int):
+                                rMax = UI
+                                if isinstance(rMin, int):
+                                    typeData = [rMin,rMax]
+                                else:
+                                    typeData = ["?",rMax]
+                                if rMin < rMax:
+                                    cont = "False"
+                                else:
+                                    cont = "min"
+                            elif isinstance(UI, None):
+                                cont = "False"
+                        if cont == "False":
+                            if isinstance(rMin, int) and isinstance(rMax,int) and rMin < rMax:
+                                typeData = [rMin,rMax]
+                                break
+                            else:
+                                instStr = "The current values or min and max are invalid. Until this is fixed you won't be able to enter data in this field. Enter 'min' to change min, 'max' to change max or leave the input blank to exit anyway."
+                    
+                                maxLenFieldTable = graphics.WINDOW_HEIGHT - len(inst) - 5
+                                fullContent = fieldTable[:maxLenFieldTable]
+
+                                graphics.drawWindow(["Leave min and max for '%s' unedited?" %(key,)],fullContent,inst,["$"])
+                                UI = userInput()
+                                if isinstance(UI, str):
+                                    if UI.lower() in ["min", "max"]:
+                                        cont = UI.lower()
+                                elif isinstance(UI, None):
+                                    break
+
+                    pass
+                elif datatype == "Choice":
+                    pass
+                elif datatype == "Time":
+                    pass
+                else:
+                    main.complain("%s has no type data" %(datatype,))
+
+                    
+
+
     graphics.drawNotYetProgrammed()
     userInput()
     return 0
@@ -398,7 +614,6 @@ def askConfirmString(key):
 
         "NameNewLogLeaf":[["Name new leaf","","Type the name of the new leaf, then press enter.","$"],
                       ["Confirm leaf name","Confirm that you want the new leaf to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to create a new branch, enter 'Quit' or 'Q'.","$"]],
-
         }
     askInfo, confirmInfo = questionDict[key]
 
