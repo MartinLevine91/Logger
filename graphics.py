@@ -167,7 +167,7 @@ def splitToWidth(longStr,maxWidth = WINDOW_WIDTH):
 
 
 def askYesNo(question):
-    title = [question,]
+    title = splitToWidth(question,WINDOW_WIDTH)
     content = ["",]
     instructionString = "Answer the question in the title, with a 'Yes' or 'Y' for yes" + \
                          " and a 'No' or 'N' for no. Capitilsation doesn't matter and " + \
@@ -230,7 +230,7 @@ def drawPickLog(key,state):
     drawNodeSelection(state.currentL, maxWidth,titleString,extraOptions,instructionString,prompt)
 
     
-def TableOfFields(leaf,maxWidth =WINDOW_WIDTH):
+def TableOfFields(leaf,maxWidth =WINDOW_WIDTH, fieldBeingEdited = None, editedFieldData = None):
     """
 
          1         2         3         4         5         6         7         8
@@ -280,27 +280,31 @@ Will break if there isn't room for K,T,O at default, D,H at min.
     fullWidthTable = []
 
     for field in fields:
-        if field.hidden:
+        if field.hidden == True:
             hidden = "H"
+        elif field.hidden == "?":
+            hidden = "?"
         else:
             hidden = " "
         
         key = field.key()
-        
+                
         dataTypeList =  json.loads(field.datatype)
-
-        if dataTypeList[0] in ["String","Int","Float","Choice"]:
-            dataType = dataTypeList[0]
-        elif dataTypeList[0] == "Range":
-            rng = str(dataTypeList[1][0]) + "-" + str(dataTypeList[1][1])
-            if len(rng) < 5:
-                dataType = "Range " + rng
-            else:
-                dataType = "Rng " + rng
-        elif dataTypeList[0] == "Time":
-            dataType = "Time " + {"Minute":"Min","Hour":"Hour","Day":"Day","Month":"Mon","Year":"Year"}[dataTypeLst[1]]
-        else:
-            main.complain("datatype processing error, Table of fields")
+        
+        try:
+            if dataTypeList[0] in ["String","Int","Float","Choice"]:
+                dataType = dataTypeList[0]
+                
+            elif dataTypeList[0] == "Range":
+                rng = str(dataTypeList[1][0]) + "-" + str(dataTypeList[1][1])
+                if len(rng) < 5:
+                    dataType = "Range " + rng
+                else:
+                    dataType = "Rng " + rng
+            elif dataTypeList[0] == "Time":
+                dataType = "Time " + {"Minute":"Min","Hour":"Hour","Day":"Day","Month":"Mon","Year":"Year"}[dataTypeLst[1]]
+        except:
+            dataType = "?" + dataTypeList[0]
 
         default = field.default
         if default == None:
@@ -312,7 +316,10 @@ Will break if there isn't room for K,T,O at default, D,H at min.
             optional = "*"
             default = ""
         else:
-            optional = " "
+            if optional == True:
+                optional = " "
+            else:
+                optional = "?"
 
 
       
@@ -495,6 +502,7 @@ key,datatype,hidden,optional,help
         key = "..."
     if datatype == None:
         datatype = '["...","..."]'
+        datatypeList = ["...","..."]
     if helpStr == None:
         helpStr = "..."
     if default == None:
@@ -512,8 +520,12 @@ key,datatype,hidden,optional,help
 
     if datatypeList[0] not in ['Range','Choice','Time']:
         fieldList += splitToWidth("No type data.",maxWidth)
-                
+    
     elif datatypeList[0] == 'Range':
+        print datatypeList
+        if datatypeList[1] in[None, []]:
+            datatypeList[1] = ["?", "?"]
+            
         typeDataStr = cutTo("Min: " + str(datatypeList[1][0]),firstHalf) + \
                       cutTo("Max: " + str(datatypeList[1][1]),secondHalf)
         fieldList.append(typeDataStr)
@@ -524,7 +536,8 @@ key,datatype,hidden,optional,help
             typeDataStr = typeDataStr[:-3] + "..."
         fieldList.append(typeDataStr)
     elif datatypeList[0] == 'Time':
-        fieldList += splitToWidth("Accurate to the nearest: " + datatypeList[1])
+        if datatypeList[1] == ["?",]:
+            fieldList += splitToWidth("Accurate to the nearest: " + datatypeList[1][0])
     
 
     
