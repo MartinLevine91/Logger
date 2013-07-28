@@ -258,10 +258,10 @@ class Leaf(Node):
                 return field
         return None
 
-    def field(self, key, datatype, default = None, optional = None, help = None, hidden = False):
+    def field(self, key, datatype, typeArgs = None, default = None, optional = None, help = None, hidden = False):
         if self.find(key):
             complain('Leaf %s already has a field called %s.' % (self._key, key))
-        field = Field(self, key, datatype, default, optional, help, hidden)
+        field = Field(self, key, datatype, typeArgs, default, optional, help, hidden)
         self._fields.append(field)
         return field
 
@@ -291,20 +291,21 @@ class Leaf(Node):
 
 
 class Field():
-    def __init__(self, leaf, key, datatype, default=None, optional=False, help=None, hidden = False):
+    def __init__(self, leaf, key, datatype, typeArgs=None, default=None, optional=False, help=None, hidden = False):
         if not isinstance(leaf, Leaf):
             complain('Field leaf %s is not a leaf.' % (leaf,))
         elif not isinstance(key, str):
             complain('Field key %s is not a string.' % (key,))
         elif not isinstance(datatype, str):
             complain('Field datatype %s is not a string.' % (datatype,))
-        elif not validDatatype(datatype):
-            complain('Field datatype %s is not a valid datatype.' % (datatype,))
+        elif not validDatatype(datatype, typeArgs):
+            complain('Field datatype %s with args %s is not a valid datatype.' % (datatype, typeArgs))
         else:
             self._leaf = leaf
             self._key = key
             # number, range, text, choice, timestamp - enforced during data entry
             self.datatype = datatype
+            self.typeArgs = typeArgs
             # value if this field isn't set in a particular entry
             self.default = default
             # also enforced only by data entry
@@ -316,6 +317,18 @@ class Field():
 
     def __repr__(self):
         return '<Field %s, for %s 0x%x>' %  (self._key, self._leaf._key, id(self))
+
+    # Warning: not appended to the fields of any leaf.
+    def copy(self):
+        return Field(self._leaf, self._key, self.datatype, self.typeArgs, self.default, self.optional, self.help, self.hidden)
+
+    # Ditto
+    @classmethod
+    def empty(cls, leaf):
+        empty = Field(leaf, "", "Int")
+        empty._key = None
+        empty.datatype = None
+        return empty
 
     def key(self):
         return self._key
@@ -330,7 +343,8 @@ class Field():
             if leaf.find(key):
                 complain('New parent %s already has a field called %s' % (leaf, key))
             else:
-                self._leaf._fields.remove(self)
+                if self._leaf and self in self._leaf._fields:
+                    self._leaf._fields.remove(self)
                 leaf._fields.append(self)
                 self._leaf = leaf
                 self._key = key
@@ -348,6 +362,8 @@ class Field():
 
     def xml(self):
         xml = etree.Element('Field', {'key': self._key, 'datatype': self.datatype})
+        if self.typeArgs:
+            xml.set('typeArgs', json.dumps(self.typeArgs))
         if self.optional:
             xml.set('optional', 'yes')
         if self.default:
@@ -363,8 +379,10 @@ class Field():
         attrib = elt.attrib
         def get(k):
             if k in attrib:
+                if k == 'typeArgs':
+                    return json.loads(attrib[k])
                 return attrib[k]
-        field = parent.field(*(map(get,('key', 'datatype', 'default', 'optional', 'help'))))
+        field = parent.field(*(map(get,('key', 'datatype', 'typeArgs', 'default', 'optional', 'help'))))
         field.optional = field.optional == 'yes'
         field.hidden = field.hidden == 'yes'
         return field
@@ -448,51 +466,41 @@ def now():
     return Time(time.mktime(time.localtime()))
 
 
-def validDatatype(datatype_str):
-# Datatypes should be a string of the form "['Datatypename',[listofinfofordatatype]]"
+def validDatatype(datatype, typeArgs):
+    # datatype is a string such as "Int"
+    # typeArgs is a type-specific list
 
-    try:
-        datatype_lst = json.loads(datatype_str)
-    except:
-        return False
-    if not isinstance(datatype_lst,list):
-        return False
-    if not len(datatype_lst) == 2:
-        return False
-
-    elif datatype_lst[0] not in ["String","Int","Float","Range","Choice","Time"]:
-        return False
-
-    elif datatype_lst[0] in ["String","Int","Float"]:
+    if datatype in ["String", "Int", "Float"]:
         return True
 
-    elif datatype_lst[0] == "Range":
-        if not isinstance(datatype_lst[1], list):
+    elif datatype == "Range":
+        if not isinstance(typeArgs, list):
             return False
-        elif isinstance(datatype_lst[1][0], int) and  isinstance(datatype_lst[1][1], int):
-            if datatype_lst[1][0] < datatype_lst[1][1]:
+        elif isinstance(typeArgs[0], int) and isinstance(typeArgs[1], int):
+            if typeArgs[0] < typeArgs[1]:
                 return True
         return False
-    elif datatype_lst[0] == "Choice":
+
+    elif datatype == "Choice":
         try:
             if isinstance(choiceList,list):
 
-                choiceList = Choice(datatype_lst[1])
-                if len(datatype_lst[1]) > 0:
+                choiceList = Choice(typeArgs)
+                if len(typeArgs) > 0:
                     choiceList.pickChoice(1)
                 return True
             else:
                 return False
         except:
             return False
-    elif datatype_lst[0] == "Time":
-        if datatype_lst[1][0] in ["Minute","Hour","Day","Month","Year"]:
+
+    elif datatype == "Time":
+        if typeArgs[0] in ["Minute","Hour","Day","Month","Year"]:
             return True
         else:
             return False
-    complain("Datatype validation went horribly wrong")
 
-
+    return False
 
 
 class Choice:
@@ -542,18 +550,25 @@ class Choice:
             self.keyList.pop()
             self.updateCurrentList()
 
-    def addChoice(self,newName,newOption):
+    def addChoice_sibling(self,newName,newOption):
         if isinstance(self.currentChoiceList[0],list):
             #add a sibling option
             self.currentChoiceList.append([newName,newOption])
         else:
-            complain("Something's wrong with a use of 'addChoice'")
+            complain("Something's wrong with a use of 'addChoice_sibling'")
 
-#These two need fixing!!
-    """
-Change them to function on level above, using a key.
+    def addChoice_child(self,key, newName,newOption):
+        if isinstance(self.currentChoiceList, list) and key-1 < len(self.currentChoiceList):
+            if not isinstance(self.currentChoiceList[key-1][1],list):
+                self.currentChoiceList[key-1][1] = [[newName, newOption]]
+            else:
+                self.currentChoiceList[key-1][1].append([newName, newOption])
 
-    """
+                
+        else:
+            complain("Something's wrong with a use of 'addChoice_child'")
+
+
     def changeName(self,key,newName):
         if isinstance(self.currentChoiceList[0], list) and key-1 < len(self.currentChoiceList):
             self.currentChoiceList[key-1][0] = newName
@@ -566,3 +581,75 @@ Change them to function on level above, using a key.
         else:
             complain("Invalid call of Choice.changeOption")
 
+
+"""
+c = Choice([[1,1],[2,[[21,21],[22,22]]],[3,3]])
+
+Full list:
+> a => a
+> b => ba => ba
+       bb => bb
+> c => c
+
+Options at current level:
+> a
+> b
+> c
+
+Key list:
+[]
+
+c.pickChoice(2)
+
+Full list:
+> a => a
+> b => ba => ba
+       bb => bb
+> c => c
+
+Options at current level:
+> ba
+> bb
+> Back
+
+Key list:
+[1]
+
+c.pickChoice(1)
+
+Full list:
+> a => a
+> b => ba => ba
+       bb => bb
+> c => c
+
+Options at current level:
+
+> Back
+
+Key list:
+[1,0]
+
+c.pickChoice(1)
+c.pickChoice(3)
+
+Full list:
+> a => a
+> b => ba => ba
+       bb => bb
+> c => c
+
+Options at current level:
+> a
+> b
+> c
+
+Key list:
+[]
+
+c.
+
+
+
+
+"""
