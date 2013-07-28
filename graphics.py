@@ -14,7 +14,6 @@ STARTING SIMPLE
 
 
 import main
-import json
 
 WINDOW_HEIGHT = 24
 WINDOW_WIDTH = 80
@@ -23,7 +22,7 @@ def superClear():
     for i in range(WINDOW_HEIGHT*4):
         print ""
 
-def cutTo(string,length):
+def cutTo(string, length = WINDOW_WIDTH):
     if len(string) > length:
         string = string [:length]
     elif len(string) < length:
@@ -35,7 +34,7 @@ def drawWindow(title,content,instruction,prompt):
     Draws a window from lists of title, content, instruction and userInput.
     Lines must not be more than maximum width and there must not be more than
     the maximum number of rows. Any empty space will be filled up though.
-    """    
+    """
     sectionChar = "-"
     endSection = [(WINDOW_WIDTH * sectionChar),]
     newLine = [""]
@@ -53,12 +52,11 @@ def drawWindow(title,content,instruction,prompt):
         print "sum =       ", lineCount
         print
         print "max =", WINDOW_HEIGHT
-        print error 
+        print error
     else:
         output = title + endSection + \
                  content + (WINDOW_HEIGHT - lineCount)*newLine + endSection + \
-                 instruction + endSection +\
-                 prompt
+                 instruction + endSection + prompt
 
         for i in range(WINDOW_HEIGHT):
             line = output[i]
@@ -80,7 +78,7 @@ def splitAndDraw(titleStr,contentStr,instructionStr,promptStr,maxWidth = WINDOW_
     title = splitToWidth(titleStr, maxWidth)
     content = splitToWidth(contentStr, maxWidth)
     instruction = splitToWidth(instructionStr, maxWidth)
-    prompt = splitToWidth(promptStr, maxWidth)
+    prompt = [promptStr,]
 
     drawWindow(title,content,instruction,prompt)
 
@@ -90,7 +88,7 @@ def drawMainMenu(menu):
     by row limit
     """
 
-#Draw the title:    
+#Draw the title:
     Title_str = findChoiceTitle(menu,"Menu selection",WINDOW_WIDTH)
     title = [Title_str,]
 
@@ -102,7 +100,7 @@ def drawMainMenu(menu):
 
     if len(menu.keyList) > 0:
         content.append(str(len(listOfChoices)+1) + ". Back")
-    
+
     instructions = ["Just pick an option from above.","And enter it below!"]
     prompt = ["Option:"]
 
@@ -110,10 +108,10 @@ def drawMainMenu(menu):
 
 
 def findChoiceTitle(choiceToSearchThrough,openingString,maxWidth):
-    
+
     Title_str = ""
     titleFinder = choiceToSearchThrough.choiceList
-    
+
     for i in range(len(choiceToSearchThrough.keyList)):
         Title_str = Title_str + titleFinder[choiceToSearchThrough.keyList[i]][0] +"/"
         titleFinder = titleFinder[choiceToSearchThrough.keyList[i]][1]
@@ -121,57 +119,69 @@ def findChoiceTitle(choiceToSearchThrough,openingString,maxWidth):
 
 
     maxChars =  maxWidth - len(openingString) - 4
-    
+
     if len(Title_str) > maxChars:
         Title_str = openingString + ": .." + Title_str[-(maxChars-2):]
     else:
         Title_str = openingString + ": ~/" + Title_str
 
-    
+
     return Title_str
 
 def findNodeTitle(currentN,openingString,maxWidth):
     Title_str = "..."
-    
+
     rootFinder = currentN
     while not isinstance(rootFinder, main.Root):
         Title_str = rootFinder.key() + "/" + Title_str
         rootFinder = rootFinder.parent()
-        
+
     maxChars =  maxWidth - len(openingString + ": ~/")
-    
+
     if len(Title_str) > maxChars:
         Title_str = openingString + ": .." + Title_str[-maxChars:]
     else:
         Title_str = openingString + ": ~/" + Title_str
     return Title_str
 
-    
+
 def drawNotYetProgrammed():
     title = ["Not yet programmed.",]
     content = ["",]
-    instructionString = "This part of the program has not been completed yet, enter" + \
+    instructionString = "This part of the program has not been completed yet, enter " + \
                         "any input to return to the part of the program that sent you here."
-    instructions = splitToWidth(instructionString, WINDOW_WIDTH)
+    instructions = splitToWidth(instructionString)
     prompt = ["Any input will do:",]
     drawWindow(title,content,instructions,prompt)
 
-    
-def splitToWidth(longStr,maxWidth = WINDOW_WIDTH):
-    strList = []
-    while len(longStr) > maxWidth:
-        strList.append(longStr[:maxWidth])
-        longStr = longStr[maxWidth:]
-    strList.append(longStr + " " * (maxWidth-len(longStr)))
-    return strList
+
+def splitToWidth(longStr, maxWidth = WINDOW_WIDTH):
+    def splitOne(line):
+        strList = []
+        while len(line) > maxWidth:
+            if line[0] == ' ':
+                line = line[1:]
+            else:
+                splitAt = maxWidth
+                while 0 < splitAt and splitAt > maxWidth - 10 and not line[splitAt]==' ':
+                    splitAt = splitAt - 1
+                newStr = line[:splitAt]
+                strList.append(newStr + " " * (maxWidth-len(newStr)))
+                line = line[splitAt:]
+        while len(line) > 0 and line[0] == ' ':
+            line = line[1:]
+        if len(line) > 0:
+            strList.append(line + " " * (maxWidth-len(line)))
+        return strList
+    return sum(map(splitOne, longStr.splitlines()), [])
 
 
 def askYesNo(question):
     title = splitToWidth(question,WINDOW_WIDTH)
     content = ["",]
-    instructionString = "Answer the question in the title, with a 'Yes' or 'Y' for yes" + \
-                         " and a 'No' or 'N' for no. Capitilsation doesn't matter and " + \
-                         "all invalid answers will be ignored."
+    instructionString = "Answer the question in the title, with a 'Yes' or 'Y' for yes " + \
+                        "and a 'No' or 'N' for no. Capitilsation doesn't matter and "   + \
+                        "all invalid answers will be ignored."
     instructions = splitToWidth(instructionString, WINDOW_WIDTH)
     prompt = ["Y or N: "]
     drawWindow(title,content,instructions,prompt)
@@ -182,12 +192,12 @@ def drawNodeSelection(currentN, maxWidth, titleString,extraOptions,instructionSt
     Currently will fail if number of options exceeds maximum as determined
     by row limit
     """
-    
+
 
     currentMenuOption = currentN
-        
+
     title = [titleString,]
-    
+
     listOfChildren = currentMenuOption.children()
     content = []
     numKids = len(listOfChildren)
@@ -195,20 +205,20 @@ def drawNodeSelection(currentN, maxWidth, titleString,extraOptions,instructionSt
         content.append(str(i+1) + ". " + listOfChildren[i].key())
 
 
-    for i in range(len(extraOptions)):  
+    for i in range(len(extraOptions)):
         content.append(str(numKids + i + 1) +". " + extraOptions[i])
-    
+
 
     content.append(str(numKids + len(extraOptions)+1) + ". Back")
-    
+
     instructions = splitToWidth(instructionString, maxWidth)
 
-    
+
     drawWindow(title,content,instructions,[prompt,])
 
 def drawPickLog(key,state):
 # Key if for a dictionary in this function which contains all the data for drawing
-# the graphics for the function that called with the key, that informaiton should 
+# the graphics for the function that called with the key, that informaiton should
 # include:
 # * max Width
 # * title openingString
@@ -222,28 +232,28 @@ def drawPickLog(key,state):
 
 
         }
-    
+
     maxWidth,openingTitleString,extraOptions,instructionString,prompt = logInfoDict[key]
 
     titleString = findNodeTitle(state.currentL,openingTitleString,maxWidth)
 
     drawNodeSelection(state.currentL, maxWidth,titleString,extraOptions,instructionString,prompt)
 
-    
-def TableOfFields(leaf,maxWidth =WINDOW_WIDTH, fieldBeingEdited = None, editedFieldData = None):
+
+def TableOfFields(leaf, maxWidth = WINDOW_WIDTH, fieldBeingEdited = None):
     """
 
          1         2         3         4         5         6         7         8
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 |##|H|Key            |Type      |*|Default       |Help                         |
-                      Range 0-10 
+                      Range 0-10
                       Time Min
                       Time Hour
                       Time Day
                       Time Mon
                       Time Year
-                      Choices... 
-                      
+                      Choices...
+
 Min and default widths for variable width fields:
 
 
@@ -276,7 +286,7 @@ Will break if there isn't room for K,T,O at default, D,H at min.
 
     fields = leaf.fields()
     print "Fields", type(fields), fields
-    
+
     fullWidthTable = []
 
     for field in fields:
@@ -286,32 +296,33 @@ Will break if there isn't room for K,T,O at default, D,H at min.
             hidden = "?"
         else:
             hidden = " "
-        
+
+        print "field: ", field
         key = field.key()
-                
-        dataTypeList =  json.loads(field.datatype)
-        
+        print "key: ", key
+
+        dataType = field.datatype
+        typeArgs = field.typeArgs
+
         try:
-            if dataTypeList[0] in ["String","Int","Float","Choice"]:
-                dataType = dataTypeList[0]
-                
-            elif dataTypeList[0] == "Range":
-                rng = str(dataTypeList[1][0]) + "-" + str(dataTypeList[1][1])
+            if dataType == "Range":
+                rng = str(typeArgs[0]) + "-" + str(typeArgs[1])
                 if len(rng) < 5:
                     dataType = "Range " + rng
                 else:
                     dataType = "Rng " + rng
-            elif dataTypeList[0] == "Time":
-                dataType = "Time " + {"Minute":"Min","Hour":"Hour","Day":"Day","Month":"Mon","Year":"Year"}[dataTypeLst[1]]
+
+            elif dataType == "Time":
+                dataType = "Time " + {"Minute":"Min", "Hour":"Hour", "Day":"Day", "Month":"Mon", "Year":"Year"}[typeArgs]
         except:
-            dataType = "?" + dataTypeList[0]
+            dataType = "?" + dataType
 
         default = field.default
         if default == None:
             default = ""
 
         optional = field.optional
-              
+
         if not optional:
             optional = "*"
             default = ""
@@ -321,8 +332,6 @@ Will break if there isn't room for K,T,O at default, D,H at min.
             else:
                 optional = "?"
 
-
-      
         fieldHelp = field.help
         if fieldHelp == None:
             fieldHelp = ""
@@ -368,10 +377,10 @@ elif >= M,M,D,D = M,M,D+,D+
     maxLenType = minLenType
     maxLenDef = minLenDef
     maxLenHelp = minLenHelp
-    
+
     for longRow in fullWidthTable:
         maxLenKey = max(maxLenKey, len(longRow[1]))
-        maxLenType = max(maxLenType, len(longRow[2]))                        
+        maxLenType = max(maxLenType, len(longRow[2]))
         maxLenDef = max(maxLenDef, len(longRow[4]))
         maxLenHelp = max(maxLenHelp, len(longRow[5]))
 
@@ -439,14 +448,14 @@ elif >= M,M,D,D = M,M,D+,D+
         #longRow = [hidden,key,dataType,optional,default,fieldHelp]
         #|##|H|Key            |Type      |*|Default       |Help     |
         longRow = fullWidthTable[i]
-        
+
         rowStr = "|"
-        
+
         i_str = str(i)
         if len(i_str) == 1:
             i_str = "0" + i_str
 
-        # Field number        
+        # Field number
         rowStr += i_str + "|"
         # Hidden?
         rowStr += longRow[0] + "|"
@@ -458,14 +467,14 @@ elif >= M,M,D,D = M,M,D+,D+
         rowStr += longRow[3] + "|"
         # Default
         rowStr += cutTo(longRow[4],defLen) + "|"
-        # Help 
+        # Help
         rowStr += cutTo(longRow[5],helpLen) + "|"
 
         fieldTable.append(rowStr)
-    
-    return fieldTable
-        
 
+    return fieldTable
+
+# NDL 2013-07-14 -- currently only one caller to drawField, and it hardwires field to None
 def drawField(field, fieldAsTable = None, maxWidth = WINDOW_WIDTH,maxHeight = 8):
     """
 Draws a field in 8 lines (or more)
@@ -474,73 +483,59 @@ Draws a field in 8 lines (or more)
 3   Type data:
 4   Hidden:     Optional:
 5   Default:
-6   Help:   
+6   Help:
 7
-8   
+8
 key,datatype,hidden,optional,help
-
-
-"
-
     """
     if field != None:
         key = field.key()
         datatype = field.datatype
-        datatypeList =  json.loads(datatype)
-
+        typeArgs = field.typeArgs
         hidden = field.hidden
         optional = field.optional
         default = field.default
         helpStr= field.help
-
-
     else:
-        key,datatype,typeData,default,optional,helpStr,hidden = fieldAsTable
-        datatypeList = [datatype,typeData]
+        key,datatype,typeArgs,default,optional,helpStr,hidden = fieldAsTable
 
     if key == None:
         key = "..."
     if datatype == None:
-        datatype = '["...","..."]'
-        datatypeList = ["...","..."]
+        datatype = "..."
+        typeArgs = "..."
     if helpStr == None:
         helpStr = "..."
     if default == None:
         default = "..."
 
-
-
     firstHalf = maxWidth/2
     secondHalf = maxWidth - firstHalf
-    
-    fieldList= []
+
+    fieldList = []
     fieldList += splitToWidth("Key: " + key, maxWidth)
 
-    fieldList += splitToWidth("Type: " + datatypeList[0], maxWidth)
+    fieldList += splitToWidth("Type: " + datatype, maxWidth)
 
-    if datatypeList[0] not in ['Range','Choice','Time']:
+    if datatype not in ['Range','Choice','Time']:
         fieldList += splitToWidth("No type data.",maxWidth)
-    
-    elif datatypeList[0] == 'Range':
-        print datatypeList
-        if datatypeList[1] in[None, []]:
-            datatypeList[1] = ["?", "?"]
-            
-        typeDataStr = cutTo("Min: " + str(datatypeList[1][0]),firstHalf) + \
-                      cutTo("Max: " + str(datatypeList[1][1]),secondHalf)
+
+    elif datatype == 'Range':
+        if typeArgs in[None, []]:
+            typeArgs = ["?", "?"]
+
+        typeDataStr = cutTo("Min: " + str(typeArgs[0]),firstHalf) + \
+                      cutTo("Max: " + str(typeArgs[1]),secondHalf)
         fieldList.append(typeDataStr)
-    elif datatypeList[0] == 'Choice':
-        choices = main.Choice(datatypeList[1])
+    elif datatype == 'Choice':
+        choices = main.Choice(typeArgs)
         typeDataStr = "Choices: " + str(choices.setOfAllChoices())[len("set(["):-len('])')]
         if len(typeDataStr) > maxWidth:
             typeDataStr = typeDataStr[:-3] + "..."
         fieldList.append(typeDataStr)
-    elif datatypeList[0] == 'Time':
-        if datatypeList[1] == ["?",]:
-            fieldList += splitToWidth("Accurate to the nearest: " + datatypeList[1][0])
-    
-
-    
+    elif datatype == 'Time':
+        if typeArgs == ["?",]:
+            fieldList += splitToWidth("Accurate to the nearest: " + typeArgs[0])
 
     if hidden == True:
         hStr = "T"
@@ -548,15 +543,19 @@ key,datatype,hidden,optional,help
         hStr = "F"
     elif hidden == None:
         hStr = "?"
-    
+    else:
+        print "!!!!!!!!"
+        print hidden
+        print "!!!!!!!!"        
+        main.complain("invalid value for hidden")
+        
     if optional == True:
         oStr = "T"
     elif optional == False:
         oStr = "F"
     elif optional == None:
         oStr = "?"
-   
-    
+
     HO_str = cutTo("Hidden: " + hStr,firstHalf ) + cutTo(" Optional: " + oStr,secondHalf)
     fieldList.append(HO_str)
 
@@ -570,8 +569,4 @@ key,datatype,hidden,optional,help
     fieldList[-1] = fieldList[-1][:-1] + '"'
 
     return fieldList
-    
 
-
-
-                                  
