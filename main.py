@@ -503,6 +503,9 @@ def validDatatype(datatype, typeArgs):
     return False
 
 
+def validFieldEntry(entry, datatype,typeArgs):
+    pass
+
 class Choice:
 # List of form [[name1, option],
 #               [name2,[[name2a,option],[name2b,option]],
@@ -537,6 +540,14 @@ class Choice:
             currentChoiceList = currentChoiceList[key][1]
         self.currentChoiceList = currentChoiceList
 
+    def filePath(self):
+        tempChoiceList = self.choiceList
+        filePath = "~"
+        for key in self.keyList:
+            filePath += "/" + tempChoiceList[key][0]
+            tempChoiceList = tempChoiceList[key][1]
+        return filePath
+        
 
     def pickChoice(self,key):
         # Pick a choice, indexing from one. If currently on a leaf choice, it assumes the wanted choice is "back"
@@ -581,75 +592,4 @@ class Choice:
         else:
             complain("Invalid call of Choice.changeOption")
 
-
-"""
-c = Choice([[1,1],[2,[[21,21],[22,22]]],[3,3]])
-
-Full list:
-> a => a
-> b => ba => ba
-       bb => bb
-> c => c
-
-Options at current level:
-> a
-> b
-> c
-
-Key list:
-[]
-
-c.pickChoice(2)
-
-Full list:
-> a => a
-> b => ba => ba
-       bb => bb
-> c => c
-
-Options at current level:
-> ba
-> bb
-> Back
-
-Key list:
-[1]
-
-c.pickChoice(1)
-
-Full list:
-> a => a
-> b => ba => ba
-       bb => bb
-> c => c
-
-Options at current level:
-
-> Back
-
-Key list:
-[1,0]
-
-c.pickChoice(1)
-c.pickChoice(3)
-
-Full list:
-> a => a
-> b => ba => ba
-       bb => bb
-> c => c
-
-Options at current level:
-> a
-> b
-> c
-
-Key list:
-[]
-
-c.
-
-
-
-
-"""
+    
