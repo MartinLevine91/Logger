@@ -531,7 +531,7 @@ key,datatype,hidden,optional,help
         choices = main.Choice(typeArgs)
         typeDataStr = "Choices: " + str(choices.setOfAllChoices())[len("set(["):-len('])')]
         if len(typeDataStr) > maxWidth:
-            typeDataStr = typeDataStr[:-3] + "..."
+            typeDataStr = typeDataStr[:maxWidth-4] + "'..."
         fieldList.append(typeDataStr)
     elif datatype == 'Time':
         if typeArgs == ["?",]:
