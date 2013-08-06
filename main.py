@@ -1,595 +1,1270 @@
-# main.py
-#
-# Functionality:
-#
-# * DONE Store data reliably
-# * Export data for post-processing
-# * DONE Define tree of keys
-# * DONE Each leaf stores entries, each entry has a number of fields
-# * SEMI-DONE Define datatypes for fields
-# * Datatypes to include int, range, choice (plus subchoices?), text, timestamp
-#   DONE Timestamp (minute): now, yesterday, ... !! check this is DST-safe !!
-#   NOT MY PROBLEM Navigate by single keystrokes
-# * Change descriptions and add  / delete fields, on the fly
-#   Hidden data (for redundant information) - ie when a field has been removed ("hidden") from that leaf
-#   NOT MY PROBLEM Easy save-and-quit
-#
-# Attributes:
-#   DONE (Python) Low memory footprint
-#   DONE (Python) Maintainable by Martin
-#   Strategy for updating the tree once there's data in it
+"""
+Things that need doing before alpha:
 
-# Test (should not error; the new file should be the same as the old
-# one):
-# >>> import main
-# >>> main.read('play.xml').write('play2.xml')
-# >>>
+edit_field:
 
-# Interface:
-#
-# 1. Constructors
-#
-# root(key = 'Everything') makes a new root. Key is a string.
-#
-# self.branch(key) makes a new branch. Self is a branch (or root); key
-# is a string (not already in use as one of self's keys).
-#
-# self.leaf(key) makes a new leaf. Self is a branch (or root); key is
-# a string (not already in use as one of self's keys).
-#
-# self.field(key, datatype, default = None, optional = None, help =
-# None, hidden = False) describes a new field. Self is a leaf; key and datatype must
-# be strings.
-#
-# self.entry(table) adds the given table to self's entries. Self is a
-# leaf; table must be a Python dictionary.
-#
-# self.move(parent=None, key=None) changes parent or key (or both) of
-# branch or leaf. Similarly self.move(self, leaf=None, key=None) for a
-# field.
-#
-# self.remove() removes a branch, leaf or field from its parent.
-#
-# self.remove_entry(key) removes an entry from its leaf.
-#
-#
-# 2. Introspection
-#
-# self.key() returns the key of a branch, leaf or field.
-#
-# self.parent() returns the parent node of a branch or leaf, or the
-# leaf of an entry.
-#
-# self.children() returns a list of self's child nodes; self is a
-# branch.
-#
-# self.find(key) returns the child of that branch (or the field of
-# that leaf) which has the given key. If key not found, returns None.
-#
-# self.entries() returns the entries of that leaf as a list of python
-# Dictionaries.
-#
-# self.fields() returns the fields of that leaf as a list.
-#
-#
-# 3. I/O
-#
-# self.write(file) writes the tree out to an xml file. Self must be a
-# root.
-#
-# read(file) reads a tree out of an xml file and returns an instance
-# of Root.
-#
-#
-# 4. Time utilities
-#
-# now() returns a Time instance representing the current date/time.
-#
-# str(Time) returns a string (such as 'Sun Jun 20 23:21:00 1993')
-# corresponding to such a Time.
-#
-# self.previous(days=None, hours=None, minutes=None) returns a new
-# Time which varies from self (another Time) by the stated
-# ammounts. If you give hours but not minutes, the Time will be
-# rounded back to the start of the hour; if you give days but not
-# hours the Time will be rounded back to the start of the day. For
-# example, t.previous(days=0) would give the midnight just gone; and
-# t.previous(hours=1, minutes=0) gives precisely one hour ago.
+- default: not started
+- when type is changed if there is a default value, that default value should be set to None. The same should happen if type-args change and make the default invalid.
+-- need test for valid values
 
-bug = [
-"                            .    . ",
-"                             )  (  ",
-"       _ _ _ _ _ _ _ _ _ _ _(.--.) ",
-"     {{ { { { { { { { { { { ( '_') ",
-"      >>>>>>>>>>>>>>>>>>>>>>>`--'> "]
+add_log_entry:
+- not started
 
-import xml.etree.ElementTree as etree
-import time
+
+Things that need doing at some point:
+
+- Lists longer than one screen height need to be handled in some fashion.
+  Probably with navigation between sets of around ten.
+- Very long strings also need some kind of navigation to be viewed properly.
+- Print out two lines of "-" after every UI entered and before each new screen.
+  (To make it easier to seperate debug info from UI)
+
+
+
+This module:
+* Keeps track of program state
+* Interprets user inputs, sending some through main.py
+* Sends the state to graphicalOut.py to update the UI
+
+
+The state needs to know what menu-node is currently active, as well the user's
+location within the program.
+
+
+- read in current data
+- offer user options
+
+> Add new log entry
+>> Choose between logs until hit leaf
+>>> Enter data for new entry
+> Add/edit logs
+>> Add log
+>>> Flick through branches until decide where to add leaf
+>>>> Fill in fieds for new log
+>> Edit log
+>>> Pick log to edit
+>>>> Edit location of log in data structure
+>>>> Edit fields for log
+> View log data
+>> Pick log
+
+
+Menu options stored as nodes, their functions must all be able to run with only State as input.
+
+When an option is selected, if it is a leaf then something along the lines of:
+"runMenuOption(currentNode, state)"
+is run.
+
+* Build in menu navigation with a runMenuOption simply printing the selected leags' location.
+
+
+%%VIEW MODES%%
+!!
+_____________________________
+Title bar
+----------------------------
+!Content!
+
+
+
+
+
+!Content!
+-----------------------------
+Instruction bar
+-----------------------------
+User input bar
+
+_____________________________
+!!
+
+Examples:
+
+Title bar: "Menu selction: ~/'Add or edit log templates'/..."
+Content: List of options (add logs, edit logs, back)
+Instruction bar: "Select menu option from above."
+User input: "1"
+
+Title bar: "Adding entries to Health/'Toilet Visit'"
+Content: Table of previous entries.
+Instruction bar: "Rate consistency on a scale of 0 to 10, 'H' for help with this datum, 'B' to go back to previous datum or 'Q' to quit entry"
+User input: "4.5"
+
+Title bar: "Editting log template - Health/Sleep"
+Content: Table of datums, complete with defaults and ranges etc. Followed by list of options/instructions for next part of next datum
+Instruction bar: "Choose a data type from the list for 'Asleep by'"
+User input: "4"
+
+
+
+
+
+
+
+
+"""
+
+import main
+import graphics
 import json
 
-def complain(what):
-    for line in bug:
-        print line
-    raise Exception(what)
+import time
 
 
-class Node():
-    def parent(self):
-        return self._parent
 
-    def key(self):
-        return self._key
+def selectNodeChild(current,userIn):
 
-    def move(self, parent=None, key=None):
-        if isinstance(parent, Branch):
-            if key is None:
-                key = self._key
-            if parent.find(key):
-                complain('New parent %s already has a child called %s' % (parent, key))
-            else:
-                self._parent._children.remove(self)
-                parent._children.append(self)
-                self._parent = parent
-                self._key = key
-        elif parent is None:
-            if key is not None:
-                if self._parent.find(key):
-                    complain('%s already has a child called %s' % (self._parent, key))
-                else:
-                    self._key = key
+    listOfChildren = current.children()
+
+    if isinstance(userIn,int):
+        if userIn < len(listOfChildren)+1 and userIn >= 0:
+            current = listOfChildren[userIn-1]
+        elif userIn == len(listOfChildren)+1:
+            current = current.parent()
+
+    return current
+
+
+
+
+def addLogTemplate(branch):
+#v0
+#-add field, give options for dataType
+# number, range, text, choice, timestamp
+
+
+    while True:
+        break
+    return None
+
+
+class LoggerState:
+    def __init__(self,menu,logRoot):
+        self.mode = "Menu"
+        self.menu = menu
+        self.currentL = logRoot
+        self.logs = logRoot
+    def returnMode(self):
+        return self.mode
+    def changeMode(self,newMode):
+        if newMode in ["Menu","DisplayInfo","AddEntry","AddEditTemplate"]:
+            self.mode = newMode
+            return 0
         else:
-            complain('New parent %s for %s isn\'t a branch.' % (parent, self))
-
-    def remove(self):
-        self._parent._children.remove(self)
+            print "Invalid mode!"
+            print invalidMode
 
 
-class Branch(Node):
-    def __init__(self, key, parent):
-        if parent and not isinstance(parent, Branch):
-            complain('Branch parent %s is not a branch.' % (parent,))
-        elif not isinstance(key, str):
-            complain('Branch key %s is not a string.' % (key,))
+def userInput():
+    try:
+        if (not FOLLOW_PRESETS) or not USER_INPUT_PRESETS:
+            userIn = raw_input()
         else:
-            self._children = []
-            self._key = key
-            self._parent = parent
-
-    def __repr__(self):
-        children = self._children
-        length = len(children)
-        key = self._key
-        name = self.__class__.__name__
-        if length == 1:
-            return '<%s %s (1 child) 08%x>' % (name, key, id(self))
-        else:
-            return '<%s %s (%d children) 08%x>' % (name, key, length, id(self))
-
-    def children(self):
-        return self._children
-
-    def find(self, key):
-        for child in self._children:
-            if child._key == key:
-                return child
-        return None
-
-    def branch(self, key):
-        if self.find(key):
-            complain('Branch %s already has a child called %s.' % (self._key, key))
-        branch = Branch(parent = self, key = key)
-        self._children.append(branch)
-        return branch
-
-    def leaf(self, key):
-        if self.find(key):
-            complain('Leaf %s already has a child called %s.' % (self._key, key))
-        leaf = Leaf(parent = self, key = key)
-        self._children.append(leaf)
-        return leaf
-
-    def xml(self):
-        name = self.__class__.__name__
-        xml = etree.Element(name, {'key': self._key})
-        for child in self._children:
-            xml.append(child.xml())
-        return xml
-
-    @classmethod
-    def parse(cls, elt, parent, parse_children):
-        return parse_children(parent.branch)
-
-
-class Root(Branch):
-    def remove(self):
-        complain('Cannot remove root.')
-
-    def move(self, parent=None, key=None):
-        if parent is not None:
-            complain('Cannot move node.')
-        self._key = key
-
-    def write(self, file):
-        etree.ElementTree(self.xml()).write(file)
-
-    @classmethod
-    def parse(cls, elt, parent, parse_children):
-        if parent:
-            complain('Root cannot have parent %r' % (parent,))
-        else:
-            return parse_children(root)
-
-
-class Leaf(Node):
-    def __init__(self, key, parent):
-        if not isinstance(parent, Branch):
-            complain('Leaf parent %s is not a branch.' % (parent,))
-        elif not isinstance(key, str):
-            complain('Left key %s is not a string.' % (key,))
-        else:
-            # fields is an list whose items each describe one entry
-            self._fields = []
-            # each entry is a table which keys field names against their values
-            self._entries = []
-            self._key = key
-            self._parent = parent
-
-    def __repr__(self):
-        entries = self._entries
-        length = len(entries)
-        key = self._key
-        if length == 1:
-            return '<Leaf %s (1 entry) 08%x>' % (key, id(self))
-        else:
-            return '<Leaf %s (%d entries) 08%x>' % (key, length, id(self))
-
-    def remove_entry(self, entry):
-        self._entries.remove(entry)
-
-    def fields(self):
-        return self._fields
-
-    def entries(self):
-        return self._entries
-
-    def find(self, key):
-        for field in self._fields:
-            if field._key == key:
-                return field
-        return None
-
-    def field(self, key, datatype, typeArgs = None, default = None, optional = None, help = None, hidden = False):
-        if self.find(key):
-            complain('Leaf %s already has a field called %s.' % (self._key, key))
-        field = Field(self, key, datatype, typeArgs, default, optional, help, hidden)
-        self._fields.append(field)
-        return field
-
-    def entry(self, table):
-        if not isinstance(table, dict):
-            complain('Leaf table %s is not a dictionary.' % (table,))
-        else:
-            self._entries.append(table)
-            return table
-
-    def xml(self):
-        xml = etree.Element('Leaf', {'key': self._key})
-        for field in self._fields:
-            xml.append(field.xml())
-        for entry in self._entries:
-            d = etree.Element('Entry')
-            for key in entry:
-                v = etree.Element('Value', {'key': key})
-                v.text = str(entry[key])
-                d.append(v)
-            xml.append(d)
-        return xml
-
-    @classmethod
-    def parse(cls, elt, parent, parse_children):
-        return parse_children(parent.leaf)
-
-
-class Field():
-    def __init__(self, leaf, key, datatype, typeArgs=None, default=None, optional=False, help=None, hidden = False):
-        if not isinstance(leaf, Leaf):
-            complain('Field leaf %s is not a leaf.' % (leaf,))
-        elif not isinstance(key, str):
-            complain('Field key %s is not a string.' % (key,))
-        elif not isinstance(datatype, str):
-            complain('Field datatype %s is not a string.' % (datatype,))
-        elif not validDatatype(datatype, typeArgs):
-            complain('Field datatype %s with args %s is not a valid datatype.' % (datatype, typeArgs))
-        else:
-            self._leaf = leaf
-            self._key = key
-            # number, range, text, choice, timestamp - enforced during data entry
-            self.datatype = datatype
-            self.typeArgs = typeArgs
-            # value if this field isn't set in a particular entry
-            self.default = default
-            # also enforced only by data entry
-            self.optional = optional
-            # currently a shortish string, might add more text, images or whatever later
-            self.help = help
-            # true or false
-            self.hidden = hidden
-
-    def __repr__(self):
-        return '<Field %s, for %s 0x%x>' %  (self._key, self._leaf._key, id(self))
-
-    # Warning: not appended to the fields of any leaf.
-    def copy(self):
-        return Field(self._leaf, self._key, self.datatype, self.typeArgs, self.default, self.optional, self.help, self.hidden)
-
-    # Ditto
-    @classmethod
-    def empty(cls, leaf):
-        empty = Field(leaf, "", "Int")
-        empty._key = None
-        empty.datatype = None
-        return empty
-
-    def key(self):
-        return self._key
-
-    def parent(self):
-        return self._leaf
-
-    def move(self, leaf=None, key=None):
-        if isinstance(leaf, Node):
-            if key is None:
-                key = self._key
-            if leaf.find(key):
-                complain('New parent %s already has a field called %s' % (leaf, key))
-            else:
-                if self._leaf and self in self._leaf._fields:
-                    self._leaf._fields.remove(self)
-                leaf._fields.append(self)
-                self._leaf = leaf
-                self._key = key
-        elif leaf is None:
-            if key is not None:
-                if self._leaf.find(key):
-                    complain('%s already has a field called %s' % (self._leaf, key))
-                else:
-                    self._key = key
-        else:
-            complain('New leaf %s for %s isn\'t a node.' % (leaf, self))
-
-    def remove(self):
-        self._leaf._fields.remove(self)
-
-    def xml(self):
-        xml = etree.Element('Field', {'key': self._key, 'datatype': self.datatype})
-        if self.typeArgs:
-            xml.set('typeArgs', json.dumps(self.typeArgs))
-        if self.optional:
-            xml.set('optional', 'yes')
-        if self.default:
-            xml.set('default', '%s' % self.default)
-        if self.help:
-            xml.set('help', self.help)
-        if self.hidden:
-            xml.set('hidden', 'yes')
-        return xml
-
-    @classmethod
-    def parse(cls, elt, parent, parse_children):
-        attrib = elt.attrib
-        def get(k):
-            if k in attrib:
-                if k == 'typeArgs':
-                    return json.loads(attrib[k])
-                return attrib[k]
-        field = parent.field(*(map(get,('key', 'datatype', 'typeArgs', 'default', 'optional', 'help'))))
-        field.optional = field.optional == 'yes'
-        field.hidden = field.hidden == 'yes'
-        return field
-
-
-def read(file):
-    class Entry:
-        @classmethod
-        def parse(cls, elt, parent, parse_children):
-            return parse_children(lambda(key): parent.entry({}))
-
-    class Value:
-        @classmethod
-        def parse(cls, elt, parent, parse_children):
-            try:
-                value = int(elt.text)
-            except ValueError:
-                value = elt.text
-            parent[elt.attrib['key']] = value
-
-    def parse(elt, parent):
-        attrib = elt.attrib
-        if 'key' in attrib:
-            key = attrib['key']
-        else:
-            key = None
-        def parse_children(constructor):
-            instance = constructor(key)
-            for child in elt:
-                parse(child, instance)
-            return instance
+            userIn = USER_INPUT_PRESETS.pop(0)
+            time.sleep(DELAY_TIMER)
+            print userIn
         try:
-            return names[elt.tag].parse(elt, parent, parse_children)
-        except KeyError:
-            complain('Element tag %s unknown.' % (elt,))
+            userIn = int(userIn)
+        except:
+            try:
+                # NDL 2013-07-14 -- raw_input() always returns a
+                # string, so str() and the enclosing try: are
+                # unnecessary.
+                userIn = str(userIn)
+                if userIn == "":
+                    userIn = None
+            except:
+                userIn = None
+    except:
+        userIn = None
+    if isinstance(userIn, str) and userIn.lower() == "kill program":
+        main.complain("Got kill request")
+    return userIn
 
-    names = dict(globals(), **locals())                 # a shameful hack
-    root = parse(etree.parse(file).getroot(), None)
-    if isinstance(root, Root):
-        return root
-    else:
-        complain('Root %s is not a root.' % (root,))
 
 
-def root(key = 'Everything'):
-    return Root(key, None)
 
-class Time:
-    def __init__(self, time, roundto=60):
-        self.time = int(time / roundto) * roundto
+FOLLOW_PRESETS = True
+USER_INPUT_PRESETS = ["2","2","2","1","1","1","2","4","Done"]
+DELAY_TIMER = 0.2
 
-    def __repr__(self):
-        return '<Time %d>' %  (self.time,)
 
-    def __str__(self):
-        return time.asctime(time.localtime(self.time))
 
-    def previous(self, days=None, hours=None, minutes=None):
-        delta = 0
-        if days: delta = delta + days * 86400
-        if hours: delta = delta + hours * 3600
-        if minutes: delta = delta + minutes * 60
-        new = self.time - delta
-        if hours is None and days is not None:
-            # Round back to midnight
-            maybe = Time(new, 86400)
-            # Check for summertime changes - the above rounding may have been bogus
-            hours = time.localtime(maybe.time).tm_hour
-            if hours == 0:
-                return maybe
-            elif hours == 1:
-                return Time(maybe.time - 3600)
+def mainMenu(state):
+
+    done = False
+
+    while True:
+        if hasattr(state.menu.currentChoiceList, '__call__'):
+            #If have selected a function: reset the log tree, run the function, then return to the parent menu.
+            state.currentL = state.logs
+            if state.menu.currentChoiceList(state) == -1:
+                break
+            state.menu.pickChoice(0)
+
+        #Draw the menu.
+        graphics.drawMainMenu(state.menu)
+
+        #Select the option inputted by the user.
+        UI = userInput()
+        if isinstance(UI,int) and UI > 0:
+            state.menu.pickChoice(UI)
+
+
+def addEntry(state):
+    graphics.drawNotYetProgrammed()
+    userInput()
+
+
+def addNewLog(state):
+
+# Find place for new log
+# Name it
+# Confirm name, then create log
+#
+#
+#
+#
+#
+#
+#
+#
+    state.currentL = state.logs
+    graphics.drawPickLog("AddNewLog",state)
+
+    while True:
+        UI = userInput()
+        if isinstance(UI, int) and UI > 0:
+            if UI-1 < len(state.currentL.children()):
+                state.currentL = state.currentL.children()[UI-1]
+                if isinstance(state.currentL,main.Leaf):
+                    state.currentL = state.currentL.parent()
+                    graphics.drawPickLog("AddNewLog_noLeaves",state)
+                else:
+                    graphics.drawPickLog("AddNewLog",state)
+
+            elif UI-1 == len(state.currentL.children()):
+                state.currentL = state.currentL.parent()
+                if state.currentL == None:
+                    state.currentL = state.logs
+                    return 0
+                graphics.drawPickLog("AddNewLog",state)
+
             else:
-                complain('Lost in time. And lost in space. And meaning.')
-        elif minutes is None and hours is not None:
-            return Time(new, 3600)
+                graphics.drawPickLog("AddNewLog",state)
+
+
+
+
+        elif isinstance(UI, str):
+            if UI.lower() in ["branch","b"]:
+                newLogName = askConfirmString("NameNewLogBranch")
+                if newLogName != None:
+                    state.currentL.branch(newLogName)
+                graphics.drawPickLog("AddNewLog",state)
+            elif UI.lower() in ["leaf","l"]:
+                newLogName = askConfirmString("NameNewLogLeaf")
+                if newLogName != None:
+                    state.currentL.leaf(newLogName)
+                    state.currentL = state.currentL.find(newLogName)
+                    editLog(state)
+                    break
+                # editLogTemplate - addDatum,
+
+
+            else:
+                graphics.drawPickLog("AddNewLog",state)
         else:
-            return Time(new)
-
-def now():
-    return Time(time.mktime(time.localtime()))
+            graphics.drawPickLog("AddNewLog_noLeaves",state)
 
 
-def validDatatype(datatype, typeArgs):
-    # datatype is a string such as "Int"
-    # typeArgs is a type-specific list
 
-    if datatype in ["String", "Int", "Float"]:
+    graphics.drawNotYetProgrammed()
+    userInput()
+    return 0
+
+
+def moveLog(state):
+    graphics.drawNotYetProgrammed()
+    userInput()
+    return 0
+
+
+def editLog(state):
+    while True:
+        # Navigate to a leaf.
+        if not isinstance(state.currentL, main.Leaf):
+            if state.currentL == None:
+                state.currentL = state.logs
+            graphics.drawPickLog("EditLog",state)
+            UI = userInput()
+            if isinstance(UI,int):
+                if UI-1 < len(state.currentL.children()):
+                    state.currentL = state.currentL.children()[UI-1]
+                # Hack to take us up one level.
+                elif UI-1 == len(state.currentL.children()):
+                    state.currentL = state.currentL.parent()
+                    if state.currentL == None:
+                        # We went up so many levels we have to stop now.
+                        state.currentL = state.logs
+                        return 0
+        else:
+            # We're on a leaf. Loop (NDL 2013-07-14 -- is this correct?) picking
+            # fields and editing them.
+            while True:
+                content = graphics.TableOfFields(state.currentL)
+                instructions = graphics.splitToWidth(
+                    "Pick a current field by entering its number, start a new field by "
+                    "entering 'N' or 'new' or press enter 'B' or 'Back' to stop editing fields."
+                    )
+                graphics.drawWindow([ "Fields for " + state.currentL.key()], content, instructions, ["$"])
+                UI = userInput()
+                if isinstance(UI, int):
+                    if UI >= 0 and UI < len(state.currentL.fields()):
+                        # Edit numbered field.
+                        fieldToEdit = state.currentL.fields()[UI]
+                        editField(fieldToEdit, state.currentL)
+                elif isinstance(UI, str):
+                    if UI.lower() in ["b", "back"]:
+                        return 0
+                    elif UI.lower() in ["n", "new"]:
+                        # Edit new (empty) field.
+                        editField(None, state.currentL)
+
+
+def editField(oldField, leaf):
+    typesWithData = ["Range", "Time", "Choice"]
+
+    if oldField is None:
+        newField = main.Field.empty(leaf)
+    else:
+        newField = oldField.copy()
+
+    slotToEdit = "help"
+
+    while True:
+        slotToEdit, fieldTable = editField_pickSlot(slotToEdit, oldField, newField, leaf, typesWithData)
+        if isinstance(slotToEdit, int):
+            if slotToEdit == 0:
+                # Save newField
+                # This should only happen if the field is completely valid!
+                # Also, won't this delete all the old data?!
+                if validField(newField):
+                        
+                    if oldField:
+                        oldField.remove()
+                    newField.move(leaf = leaf)
+                    
+                    return slotToEdit
+                else:
+                    while True:
+                        graphics.askYesNo("The field %s cannot be saved in it's current state, would you still "
+                                          "like to quit (and lose any changes you've made)?" % (field.key(),))
+                        UI = userInput()
+                        if isinstance(UI, str):
+                            if UI.lower() in ["y","yes"]:
+                                return slotToEdit
+                            if UI.lower() in ["n","no"]:
+                                break
+            else:
+                return slotToEdit
+
+        slotFunctionDict = {
+            "key"       :editField_setKey,
+            "datatype"  :editField_setDatatype,
+            "type data" :editField_setTypeArgs,
+            "hidden"    :editField_setHidden,
+            "optional"  :editField_setOptional,
+            "default"   :editField_setDefault,
+            "help"      :editField_setHelp}
+            
+
+        if slotToEdit in slotFunctionDict:
+            slotFunctionDict[slotToEdit](newField,fieldTable)
+
+    graphics.drawNotYetProgrammed()
+    userInput()
+    return 0
+
+def validField(field):
+
+    if not validString(field.key()):
+        return False
+    elif not main.validDatatype(field.datatype,field.typeArgs):
+        return False
+    elif not isinstance(field.hidden, bool):
+        return False
+    elif not isinstance(field.optional, bool):
+        return False
+    elif not validString(field.help):
+        return False
+    else:
+        if field.optional:
+            if field.default == None:
+                return False
+        else:
+            field.default = None
+            return True
+
+
+def validString(string):
+    if isinstance(string, str):
+        for item in ["%", "/n"]:
+            if item in string:
+                return False
         return True
-
-    elif datatype == "Range":
-        if not isinstance(typeArgs, list):
-            return False
-        elif isinstance(typeArgs[0], int) and isinstance(typeArgs[1], int):
-            if typeArgs[0] < typeArgs[1]:
-                return True
+    else:
         return False
 
-    elif datatype == "Choice":
-        try:
-            if isinstance(choiceList,list):
+def editField_pickSlot(slotToEdit, oldField, newField, leaf, typesWithData):
+    "Return a string, or an int meaning a quit."
+    originalSlotToEdit = slotToEdit
+    i = 0
+    
+    while True:
+        slotToEdit = editField_pickSlot_default(slotToEdit, newField, typesWithData)
 
-                choiceList = Choice(typeArgs)
-                if len(typeArgs) > 0:
-                    choiceList.pickChoice(1)
-                return True
-            else:
-                return False
-        except:
-            return False
+        inst_str_whatNext = "Either pick an option or press enter with the input blank to edit %s next." % (slotToEdit,)
+        inst_whatNext = graphics.splitToWidth(inst_str_whatNext)
 
-    elif datatype == "Time":
-        if typeArgs[0] in ["Minute","Hour","Day","Month","Year"]:
-            return True
+        shift = [0,0]
+        inst_whatNext = editField_pickSlot_constructOptions(inst_whatNext, newField, shift, typesWithData)
+
+        fieldsTable = graphics.TableOfFields(leaf, graphics.WINDOW_WIDTH, oldField)
+        currentSlots = (newField.key(), newField.datatype, newField.typeArgs,newField.default,
+                        newField.optional,  newField.help, newField.hidden)
+        fieldTable = graphics.drawField(None, currentSlots)
+
+        # NDL 2013-07-14 -- this value isn't actually used
+        # fullContent = fieldsTable + ["-" * graphics.WINDOW_WIDTH] + fieldTable
+
+        maxLenFieldsTable = graphics.WINDOW_HEIGHT - len(inst_whatNext) - len(fieldTable) - 6
+        if maxLenFieldsTable > 1:
+            fullContent = fieldsTable[:maxLenFieldsTable] + ["-" * graphics.WINDOW_WIDTH] + fieldTable
         else:
-            return False
+            fullContent = fieldTable
 
-    return False
+        graphics.drawWindow(["Editing field '%s'" %(newField.key(),)], fullContent, inst_whatNext, ["$ "])
+
+        slotToEdit = editField_pickSlot_askUser(shift, slotToEdit)
+
+        if slotToEdit is not None:
+            return slotToEdit, fieldTable
+        else:
+            slotToEdit = originalSlotToEdit
+
+def editField_pickSlot_default(slotToEdit, field, typesWithData):
+    # Part one: working from the top, check whether anything has been left unset.
+    if field.key() is None:
+        return "key"
+    elif field.datatype is None:
+        return "datatype"
+    elif field.datatype in typesWithData and field.typeArgs is None:
+        return "type data"
+    elif field.hidden is None:
+        return "hidden"
+    elif field.optional is None:
+        return "optional"
+    elif field.optional == True and field.default is None:
+        return "default"
+    elif field.help is None:
+        return "help"
+    else:
+        # Part two: next editable item after the last slotToEdit
+        thingsToEdit = ["key", "datatype", "type data", "hidden", "optional", "default", "help"]
+        if slotToEdit in thingsToEdit:
+            i = thingsToEdit.index(slotToEdit)
+            i = (i+1)%(len(thingsToEdit))
+            slotToEdit = thingsToEdit[i]
+            if slotToEdit == "type data" and field.datatype not in typesWithData:
+                slotToEdit = "hidden"
+            if slotToEdit == "default" and field.optional is False:
+                slotToEdit = "help"
+        return slotToEdit
+
+def editField_pickSlot_constructOptions(inst_whatNext, field, shift, typesWithData):
+    inst_whatNext += [graphics.cutTo(str(1) + ". Key")]
+    inst_whatNext += [graphics.cutTo(str(2) + ". Datatype")]
+    if field.datatype in typesWithData:
+        shift[0]= 1
+        inst_whatNext += [graphics.cutTo(str(3) + ". Type data")]
+    inst_whatNext += [graphics.cutTo(str(3 + shift[0]) + ". Hidden")]
+    inst_whatNext += [graphics.cutTo(str(4 + shift[0]) + ". Optional")]
+    if field.optional == True:
+        shift[1] = 1
+        inst_whatNext += [graphics.cutTo(str(5+ shift[0]) + ". Default")]
+    inst_whatNext += [graphics.cutTo(str(5 + shift[0] +shift[1]) + ". Help")]
+    inst_whatNext += [graphics.cutTo("Alternatively, enter 'Done' to save and quit or 'Cancel' to quit without saving.")]
+    return inst_whatNext
+
+def editField_pickSlot_askUser(shift, default):
+    "Return a string, or None meaning try again, or an int meaning a quit."
+    UI = userInput()
+    if isinstance(UI, str):
+        if UI.lower() in ["done", "d"]:
+            return 0
+        if UI.lower() in ["cancel", "c"]:
+            return -1
+    elif isinstance(UI, int):
+        if UI > 0 and UI <= (6 + shift[0] + shift[1]):
+            if shift == [0,0]:
+                return ["key", "datatype", "hidden", "optional", "help"][UI-1]
+            elif shift == [1, 0]:
+                return ["key", "datatype", "type data", "hidden", "optional", "help"][UI-1]
+            elif shift == [0, 1]:
+                return ["key", "datatype", "hidden", "optional", "default", "help"][UI-1]
+            elif shift == [1, 1]:
+                return ["key", "datatype", "type data", "hidden", "optional", "default", "help"][UI-1]
+            else:
+                # NDL 2013-07-14 -- Surely an error?
+                pass
+    elif UI == None:
+        return default
+    else:
+        return None
+# current -> newField
+# field   -> oldField
 
 
-def validFieldEntry(entry, datatype,typeArgs):
-    pass
 
-class Choice:
-# List of form [[name1, option],
-#               [name2,[[name2a,option],[name2b,option]],
-#               [name3, option]]
-# When used as a datatype, the stored answer will be an
-# the final name-key. The options on leaves will automatically
-# be set to their name-key.
+# FIELD SLOT SETTERS
 
-    def __init__(self, choiceList):
-        self.choiceList = choiceList
-        self.currentChoiceList = choiceList
-        self.keyList = []
-        self.name = ""
+def editField_drawAndUI(titleStr, instStr, fieldTable):
+    fullInst = graphics.splitToWidth(instStr)
+    maxLenFieldTable = graphics.WINDOW_HEIGHT - len(fullInst) - 5
+    fullContent = fieldTable[:maxLenFieldTable]
+    title = graphics.splitToWidth(titleStr)
+    graphics.drawWindow(title, fullContent, fullInst, ["$"])
+    return userInput()
 
-    def setOfAllChoices(self, listOfChoices = None):
-        if listOfChoices == None:
-            listOfChoices = self.choiceList
-        choiceSet = set([])
-        if not isinstance(listOfChoices, list):
-            choiceSet.add(listOfChoices)
-            return choiceSet
-        for choice in listOfChoices:
-            newSet = self.setOfAllChoices(choice[1])
-            choiceSet = choiceSet.union(newSet)
-        return choiceSet
+def editField_drawAndUI_optionList(title, head, choices, tail, fieldTable):
+    inst = ['%s\n' % (head,)] if head else []
+    for i in range(len(choices)):
+        inst.append(graphics.cutTo((str(i+1) + ". " + choices[i])))
+    inst = inst + [tail] if tail else inst
+    UI = editField_drawAndUI(title, ''.join(inst), fieldTable)
+    return UI
 
-    def updateCurrentList(self):
-        currentChoiceList = self.choiceList
-        self.name = ""
-        for key in self.keyList:
-            self.name = currentChoiceList[key][0]
-            currentChoiceList = currentChoiceList[key][1]
-        self.currentChoiceList = currentChoiceList
+def editField_setKey(field, fieldTable):
+    key = field.key()
+    while True:
+        UI = editField_drawAndUI("Editing key for field '%s'" %(key,),
+                             "Enter new key, or press enter leaving the input blank to leave the key as it was.",
+                             fieldTable)
+        if isinstance(UI, str):
+            key = UI
+            break
+        elif UI == None:
+            if key == None:
+                if editField_confirmLeaveBlank('key'):
+                    break
+            else:
+                # NDL 2013-07-15 -- This is not allowed.
+                # Martin 2013-07-18 -- ?? Yes it is. This should leave key as it was, as per instructions given above.
+                break
+    if key:
+        field.move(key=key)
 
-    def filePath(self):
-        tempChoiceList = self.choiceList
-        filePath = "~"
-        for key in self.keyList:
-            filePath += "/" + tempChoiceList[key][0]
-            tempChoiceList = tempChoiceList[key][1]
-        return filePath
+def editField_setDatatype(field, fieldTable):
+    typeList = ["String", "Int", "Float", "Range", "Choice", "Time"]
+
+    datatype = field.datatype
+    typeArgs = field.typeArgs
+
+    while True:
+        UI = editField_drawAndUI_optionList("Picking datatype for field '%s'" % (field.key(),),
+                    "Choose from the following options for datatype:",
+                    typeList,
+                    "Alternatively press enter leaving the input blank to leave datatype as it was.",
+                    fieldTable)
+
+        if isinstance(UI, int):
+            if UI > 0 and UI <= len(typeList):
+                if typeList[UI-1] != datatype:
+                    datatype = typeList[UI-1]
+                    typeArgs = None
+                break
+        elif UI == None:
+            if datatype == None:
+                if editField_confirmLeaveBlank('datatype'):
+                    break
+            else:
+                break
+    field.datatype = datatype
+    field.typeArgs = typeArgs
+
+
+def editField_setTypeArgs(field, fieldTable):
+    datatype = field.datatype
+    if datatype == "Range":
+        editField_setTypeArgs_range(field, fieldTable)
+    elif datatype == "Choice":
+        editField_setTypeArgs_choice(field, fieldTable)
+    elif datatype == "Time":
+        editField_setTypeArgs_time(field, fieldTable)
+    else:
+        # Shouldn't get here
+        main.complain("%s has no type data" %(datatype,))
+
+def editField_setTypeArgs_range(field, fieldTable):
+    def requestExtremum(which):
+        return editField_drawAndUI("Setting %s for field '%s'" % (which, field.key(),),
+                               "Enter the %s value for the range or press enter leaving the input blank to leave it as is." % (which,),
+                               fieldTable)
+
+    typeArgs = field.typeArgs
+    if typeArgs == None:
+        rMin = "?"
+        rMax = "?"
+    else:
+        rMin, rMax = typeArgs
+
+    cont = "min"
+    while True:
+        if cont == "min":
+            UI = requestExtremum('minimum')
+            if isinstance(UI, int):
+                rMin = UI
+                if isinstance(rMax, int):
+                    typeArgs = [rMin,rMax]
+                else:
+                    typeArgs = [rMin,"?"]
+                cont = "max"
+            elif UI is None:
+                cont = "max"
+        if cont == "max":
+            UI = requestExtremum('maximum')
+            if isinstance(UI, int):
+                rMax = UI
+                if isinstance(rMin, int):
+                    typeArgs = [rMin,rMax]
+                else:
+                    typeArgs = ["?",rMax]
+
+                if isinstance(rmin, int):
+                    if rMin < rMax:
+                        cont = "False"
+                    else:
+                        cont = "min"
+                else:
+                    cont = "min"
+            elif UI is None:
+                cont = "False"
+        if cont == "False":
+            if isinstance(rMin, int) and isinstance(rMax,int) and rMin < rMax:
+                field.typeArgs = [rMin,rMax]
+                break
+            else:
+                instStr = "The current values or min and max are invalid. Until this is fixed " + \
+                          "you won't be able to enter data in this field. Enter 'min' to change " \
+                          "min, 'max' to change max or leave the input blank to exit anyway."
+                UI = editField_drawAndUI("Leave min and max for '%s' unedited?" %(field.key(),), instStr, fieldTable)
+
+                if isinstance(UI, str):
+                    if UI.lower() in ["min", "max"]:
+                        cont = UI.lower()
+                elif UI is None:
+                    break
+
+def editField_setTypeArgs_time(field, fieldTable):
+    typeList = field.typeArgs
+    if typeList:
+        time = typeList[0] 
+    else:
+        time = None
+    possibles = ["Minute","Hour","Day","Month","Year"]
+    while True:
+        UI = editField_drawAndUI_optionList("Setting time precision for field '%s'" % (field.key(),),
+                    "Choose from the following options for time precision:",
+                    possibles,
+                    "Alternatively press enter leaving the input blank to leave precision as it was.",
+                    fieldTable)
+        if isinstance(UI, int):
+            if UI > 0 and UI <= len(possibles):
+                time = possibles[UI-1]
+                break
+        elif UI is null:
+            return
+
+    if time:
+        field.typeArgs = [time]
+
+def editField_setTypeArgs_choice(field,fieldTable):
+    choice = main.Choice(field.typeArgs)
+    if choice.choiceList == None:
+        choice = main.Choice([])
+    titlePreStr = "Editing field %s - editing choice list - " % (field.key(),)
+    choiceListEditor(choice, False, titlePreStr)
+    field.typeArgs = choice.choiceList
+
+    # ML 2013-07-20 Working on choice navigation before continuing this.
+
+def editField_setHidden(field,fieldTable):
+    titleStr = "Setting hidden for field '%s'" % (field.key(),)
+    instStr = "To set hidden as true, enter 't' or 'true', to set hidden as false enter 'f' or 'false'. Alternately, press enter leaving the input blank to leave hidden as is. Hidden fields are not visible entering logs, but past data is not lost and the field can be unhidden at any time."
+    while True:
+        UI =  editField_drawAndUI(titleStr, instStr, fieldTable)
+        if isinstance(UI, str):
+            if UI.lower() in ['t','true']:
+                field.hidden = True
+                break
+            elif UI.lower() in ['f','false']:
+                field.hidden = False
+                break
+        elif UI == None:
+            break
+    return 0
         
 
-    def pickChoice(self,key):
-        # Pick a choice, indexing from one. If currently on a leaf choice, it assumes the wanted choice is "back"
-        if isinstance(self.currentChoiceList,list):
-            if key-1 < len(self.currentChoiceList):
-                self.keyList.append(key-1)
-            elif key-1 == len(self.currentChoiceList) and len(self.keyList) > 0:
-                self.keyList.pop()
-            self.updateCurrentList()
-        else:
-            self.keyList.pop()
-            self.updateCurrentList()
+def editField_setOptional(field,fieldTable):
+    titleStr = "Setting optional for field '%s'" % (field.key(),)
+    instStr = "To set optional as true, enter 't' or 'true', to set optional as false enter 'f' or 'false'. Alternately, press enter leaving the input blank to leave optional as is. Optional fields have a default value which they are set to unless specified otherwise."
+    while True:
+        UI =  editField_drawAndUI(titleStr, instStr, fieldTable)
+        if isinstance(UI, str):
+            if UI.lower() in ['t','true']:
+                field.optional = True
+                break
+            elif UI.lower() in ['f','false']:
+                field.optional = False
+                break
+        elif UI == None:
+            break
+    return 0
 
-    def addChoice_sibling(self,newName,newOption):
-        if isinstance(self.currentChoiceList[0],list):
-            #add a sibling option
-            self.currentChoiceList.append([newName,newOption])
-        else:
-            complain("Something's wrong with a use of 'addChoice_sibling'")
+def editField_setDefault(field,fieldTable):
+    pass
 
-    def addChoice_child(self,key, newName,newOption):
-        if isinstance(self.currentChoiceList, list) and key-1 < len(self.currentChoiceList):
-            if not isinstance(self.currentChoiceList[key-1][1],list):
-                self.currentChoiceList[key-1][1] = [[newName, newOption]]
+def editField_setHelp(field,fieldTable):
+    helpStr = field.help
+    fieldTable = graphics.drawField(field,None,graphics.WINDOW_WIDTH, graphics.WINDOW_HEIGHT)
+    while True:
+        UI = editField_drawAndUI("Editing help for field '%s'" %(field.key(),),
+                             "Enter new help string, or press enter leaving the input blank to leave the help string as it was.",
+                             fieldTable)
+        if isinstance(UI, str):
+            helpStr = UI
+            break
+        elif UI == None:
+            if helpStr == None:
+                if editField_confirmLeaveBlank('help'):
+                    break
             else:
-                self.currentChoiceList[key-1][1].append([newName, newOption])
+                # NDL 2013-07-15 -- This is not allowed.
+                # Martin 2013-07-18 -- ?? Yes it is. This should leave key as it was, as per instructions given above.
+                break
+    if helpStr:
+        field.help = helpStr
 
-                
-        else:
-            complain("Something's wrong with a use of 'addChoice_child'")
 
 
-    def changeName(self,key,newName):
-        if isinstance(self.currentChoiceList[0], list) and key-1 < len(self.currentChoiceList):
-            self.currentChoiceList[key-1][0] = newName
-        else:
-            complain("Invalid call of Choice.changeName")
+def editField_confirmLeaveBlank(what):
+    while True:
+        graphics.askYesNo("Do you wish to leave the %s blank? If you do so you won't be able to save the field." % (what,))
+        UI = userInput()
+        if isinstance(UI, str):
+            if UI.lower() in ["y","yes"]:
+                return True
+            if UI.lower() in ["n","no"]:
+                return False
 
-    def changeOption(self,key, newOption):
-        if isinstance(self.currentChoiceList[0], list) and key-1 < len(self.currentChoiceList):
-            self.currentChoiceList[key-1][1] = newOption
-        else:
-            complain("Invalid call of Choice.changeOption")
+
+
+def viewData(state):
+    graphics.drawNotYetProgrammed()
+    userInput()
+    return 0
+
+def quitProgram(state):
+    while True:
+        graphics.askYesNo("Are you sure you want to quit?")
+        UI = userInput()
+        if isinstance(UI,str):
+            if UI.lower() in ["y","yes"]:
+                break
+            if UI.lower() in ["n","no"]:
+                return 0
+        if UI == 1:
+            break
+    state.logs.write("Logs.xml")
+    return -1
+
+
+def askConfirmString(key, titleInsert = None):
+    questionDict = {
+        "NameNewLogBranch":[["Name new branch","","Type the name of the new branch, then press enter.","$"],
+                      ["Confirm branch name","Confirm that you want the new branch to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to create a new branch, enter 'Quit' or 'Q'.","$"]],
+
+        "NameNewLogLeaf":[["Name new leaf","","Type the name of the new leaf, then press enter.","$"],
+                      ["Confirm leaf name","Confirm that you want the new leaf to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to create a new leaf, enter 'Quit' or 'Q'.","$"]],
+
+        "NameNewChoice":[["Name new choice","","Type the name of the new choice, then press enter.","$"],
+                      ["Confirm choice name","Confirm that you want the new choice to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to create a new choice, enter 'Quit' or 'Q'.","$"]],
+
+        "NameNewChildChoice":[["Name new sub-choice of %s","","Type the name of the new choice, then press enter.","$"],
+                      ["Confirm sub-choice name","Confirm that you want the new choice to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to rename the choice, enter 'Quit' or 'Q'.","$"]],
+       
+        "RenameChoice":[["Rename the choice %s","","Type the new name of the choice, then press enter.","$"],
+                      ["Confirm rename name","Confirm that you want the choice to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to rename the choice, enter 'Quit' or 'Q'.","$"]],
+        }
 
     
+    askInfo, confirmInfo = questionDict[key]
+
+    if titleInsert:
+        if "%s" in askInfo[0]:
+            askInfo[0] = askInfo[0] % (titleInsert,)
+        if "%s" in confirmInfo[0]:
+            confirmInfo[0] = confirmInfo[0] % (titleInsert,)
+                
+
+    progress = "ask"
+
+    while True:
+        if progress == "ask":
+            title,content,instruction,prompt = askInfo
+            graphics.splitAndDraw(title,content,instruction,prompt)
+            ans = userInput()
+            if isinstance(ans, str):
+                progress = "confirm"
+        if progress == "confirm":
+            title,content,instruction,prompt = confirmInfo
+            if "%s" in content:
+                content = content % ans
+            graphics.splitAndDraw(title,content,instruction,prompt)
+            UI = userInput()
+            if isinstance(UI, str):
+                if UI.lower() in ["y","yes"]:
+                    return ans
+                if UI.lower() in ["q","quit"]:
+                    return None
+                if UI.lower() in ["n","no"]:
+                    progress = "ask"
+
+
+
+"""
+navigate choice will exist in two places:
+- edit field, type args  - No arg selection, add choice "save & quit"
+- add log entry - basically as below, arg selection only way out.
+
+
+As there are just those two, probably the best solution is not to abstract much but to add some logic and different titles. First neaten it up though.
+
+
+Okay, so should abstract the graphics.
+
+
+Give title, the choice, list of Qs, instr
+
+
+
+"""
+# At no point have I dealt with the prospect of things that cannot be fit on the screen (i.e. a choice list that has 50 items on the first tier) This'll need to be fixed before too long.
+
+
+
+def choiceListEditor(choice, pickChoice = True, titlePreStr = "Choice List Editor - "):
+    """
+   Title format:
+
+Editing field _________ - editing choice list - ~/a/b
+
+Adding to log _________ - selecting choice for field __________ - ~/a/b
+    """
+
+    possibleOptions = [ 
+        "Back",
+        "Add a choice to this list",
+        "Add a sub-choice to one of the choices on this list",
+        "Change the name of one of the choices on this list",
+        "Delete one of the choices on this list, along with any sub-choices",
+        "Add a sub-choice to %s",
+        "Change the name of %s",
+        "Delete %s, along with any sub-choices",
+        "Finish editing choice list"]
+
+    while True:
+
+        currentOptions = [False,
+                          False,
+                          False,
+                          False,
+                          False,
+                          False,
+                          False,
+                          False,
+                          (not pickChoice)]
+
+        listOfOptions = []
+        """
+draw and ask
+interpret
+do thing
+        """
+        print "!"
+        print choice.choiceList
+        print "!"
+        
+        if choice.choiceList == []:
+            # Deal with empty choice list.
+
+            # Set avaialble options, build graphics, and ask for UI
+            
+            currentOptions[1] = True
+
+            for i in range(len(possibleOptions)):
+                if currentOptions[i]:
+                    listOfOptions.append(possibleOptions[i])
+
+            titleStr = titlePreStr + choice.filePath()
+
+            if pickChoice:
+                instStr = "This choice list is currently empty, so your only option is to create a new choice."
+            else:
+                instStr = "This choice list is currently empty, so either create a new choice or quit editing."
+
+            n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+
+            # Respond to UI
+            if isinstance(UI,int):
+                if UI == 1:
+                    newName = askConfirmString("NameNewChoice")
+                    if newName:
+                        choice.choiceList = [[newName,newName]]
+                        choice.keyList = []
+                        choice.updateCurrentList()
+                if UI == 2 and not pickChoice:
+                    break
+                
+        elif not isinstance(choice.currentChoiceList,list):
+        
+
+            # Set avaialble options, build graphics, and ask for UI
+            currentOptions[0] = True
+            currentOptions[5:8] = [True,]*3
+
+            for i in range(len(possibleOptions)):
+                if currentOptions[i]:
+                    listOfOptions.append(possibleOptions[i])
+
+            
+            if pickChoice:
+                instStr = "Press enter to confirm your selection of %s, or select from one of the options above." % (str(choice.currentChoiceList),)
+                titleStr = titlePreStr + choice.filePath() + " - confirm selection"
+
+            else:
+                instStr = "Select from the options above."
+                titleStr = titlePreStr + choice.filePath()
+
+            
+            n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+            if n != 0:
+                main.complain("huh")
+            
+            #Respond to UI
+            if UI == None and pickChoice:
+                print "Have picked %s" % (str(choice.currentChoiceList),)
+                return choice.currentChoiceList
+            elif isinstance(UI,int):
+                if UI == 1:
+                    choice.pickChoice(1)
+                elif UI == 2:
+                    newName = askConfirmString("NameNewChildChoice", choice.currentChoiceList)
+                    if newName:
+                        key = choice.keyList[-1]
+                        choice.keyList.pop()
+                        choice.updateCurrentList()
+                        choice.currentChoiceList[key][1] = [[newName, newName]]
+                        choice.pickChoice(key+1)                        
+                elif UI == 3:
+                    newName = askConfirmString("RenameChoice", choice.currentChoiceList)
+                    if newName:
+                        key = choice.keyList[-1]
+                        choice.keyList.pop()
+                        choice.updateCurrentList()
+                        choice.currentChoiceList[key] = [newName, newName]
+                        choice.pickChoice(key+1)
+                elif UI == 4:
+                    while True:
+                        graphics.askYesNo("Are you sure you want to delete %s and all sub-choices?" %(choice.currentChoiceList,))
+                        UI = userInput()
+                        if isinstance(UI,str):
+                            key = choice.keyList[-1]
+                            choice.keyList.pop()
+                            choice.updateCurrentList()                            
+                            if UI.lower() in ["y","yes"]:
+                                if len(choice.currentChoiceList) > 1:
+                                    choice.currentChoiceList.pop(key)
+                                elif len(choice.keyList) > 0:
+                                    key = choice.keyList[-1]
+                                    choice.keyList.pop()
+                                    choice.updateCurrentList()
+                                    choice.currentChoiceList[key][1] = choice.currentChoiceList[key][0]
+                                    choice.pickChoice(key+1)
+                                    
+                                else:
+                                    choice.choiceList = []
+                                break
+                            if UI.lower() in ["n","no"]:
+                                break
+                elif UI == 5 and not pickChoice:
+                    break
+        else:
+             # Set avaialble options, build graphics, and ask for UI
+            if len(choice.keyList)> 0:
+                shift = 1
+                currentOptions[0] = True
+            else:
+                shift = 0
+            currentOptions[1:5] = [True,]*4
+
+            for i in range(len(possibleOptions)):
+                if currentOptions[i]:
+                    listOfOptions.append(possibleOptions[i])
+
+            titleStr = titlePreStr + choice.filePath()
+            instStr = "Select from the options above."
+
+            n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
+            
+            #Respond to UI
+            if isinstance(UI, int):
+                if UI > 0 and UI < n + 1 + shift:
+                    choice.pickChoice(UI)
+                elif UI == n + 1 + shift:
+                    newName = askConfirmString("NameNewChoice")
+                    if newName:
+                        choice.addChoice_sibling(newName,newName)
+                elif UI == n + 2 + shift:
+                    while True:
+                        titleStr = titlePreStr + choice.filePath() + " - adding sub-choice"
+                        instStr = "Select a choice to add a sub-choice to."
+                        listOfOptions = ["Do not add a sub-choice",]
+
+                        n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
+                        
+                        if isinstance(UI, int):
+                            if UI > 0 and UI < n + 1:
+                                key = UI
+                                newName = askConfirmString("NameNewChildChoice", choice.currentChoiceList[UI-1][0])
+                                if newName:
+                                    choice.addChoice_child(key,newName,newName)
+                                break
+                            elif UI == n + 1:
+                                break
+                elif UI == n + 3 + shift:
+                    while True:
+                        titleStr = titlePreStr + choice.filePath() + " - renaming choice"
+                        instStr = "Select a choice to rename."
+                        listOfOptions = ["Do not rename a choice.",]
+
+                        n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
+                        
+                        if isinstance(UI, int):
+                            if UI > 0 and UI < n + 1:
+                                key = UI
+                                newName = askConfirmString("RenameChoice", choice.currentChoiceList[UI-1][0])
+                                if newName:
+                                    if isinstance(choice.currentChoiceList[UI-1][1], list):
+                                        choice.changeName(UI, newName)
+                                    else:
+                                        choice.currentChoiceList[UI-1] = [newName, newName]
+                                break
+                            elif UI == n + 1:
+                                break                   
+                elif UI == n + 4 + shift:
+                    while True:
+                        titleStr = titlePreStr + choice.filePath() + " - deleting choice"
+                        instStr = "Select a choice to delete."
+                        listOfOptions = ["Do not delete a choice.",]
+
+                        n, key = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+                        
+                        if isinstance(key, int):
+                            if key > 0 and key < n + 1:
+                                while True:
+                                    graphics.askYesNo("Are you sure you want to delete %s and all sub-choices?" %(choice.currentChoiceList[key-1][0],))
+                                    UI = userInput()
+                                    if isinstance(UI,str):
+                                        if UI.lower() in ["y","yes"]:
+                                            if len(choice.currentChoiceList) > 1:
+                                                choice.currentChoiceList.pop(key-1)
+                                            elif len(choice.keyList) > 0:
+                                                key = choice.keyList[-1]
+                                                choice.keyList.pop()
+                                                choice.updateCurrentList()
+                                                choice.currentChoiceList[key][1] = choice.currentChoiceList[key][0]
+                                                choice.pickChoice(key+1)
+                                                
+                                            else:
+                                                choice.choiceList = []
+                                            break
+                                        if UI.lower() in ["n","no"]:
+                                            break
+                                break
+                            elif key == n + 1:
+                                break
+                elif UI == n + 5 + shift:
+                    
+                    break
+     
+
+
+def choiceListEditor_drawAndUI(titleStr, choice, otherOptions, instStr):
+    title = graphics.splitToWidth(titleStr)
+
+    listOfOptions = []
+    
+    if choice.choiceList == []:
+        n = 0
+    elif isinstance(choice.currentChoiceList,list):
+        n = len(choice.currentChoiceList)
+        for i in range(n):
+            listOfOptions.append(choice.currentChoiceList[i][0])
+    else:
+        n = 0
+
+    listOfOptions += otherOptions
+
+    content = []
+    for i in range(len(listOfOptions)):
+        optionStr = str(i+1) + ". " + str(listOfOptions[i])
+        if "%s" in optionStr:
+            optionStr = optionStr % (str(choice.currentChoiceList))
+        content += graphics.splitToWidth(optionStr)
+
+
+    inst = graphics.splitToWidth(instStr)
+
+    graphics.drawWindow(title, content,inst,["$"])
+    return n, userInput()
+
+
+
+
+
+    
+    
+"""        
+def editField_drawAndUI(title, text, fieldTable):
+    splitText = graphics.splitToWidth(text)
+    maxLenFieldTable = graphics.WINDOW_HEIGHT - len(splitText) - 5
+    fullContent = fieldTable[:maxLenFieldTable]
+    graphics.drawWindow([title], fullContent, splitText, ["$"])
+    return userInput()
+
+def editField_drawAndUI_optionList(title, head, choices, tail, fieldTable):
+    inst = ['%s\n' % (head,)] if head else []
+    for i in range(len(choices)):
+        inst.append(graphics.cutTo((str(i+1) + ". " + choices[i])))
+    inst = inst + [tail] if tail else inst
+    UI = editField_drawAndUI(title, ''.join(inst), fieldTable)
+    return UI
+
+"""
+
+def getData(dataType_str,title,content):
+    dataFunctionDict = {
+        "String":getString,
+        "Int":getInt,
+        "Float":getFloat,
+        "Range":getRange,
+        "Choice":getChoice,
+        "Time":getTime}
+
+    if not main.validDatatype(dataType_str):
+        main.complain("Invalid data type, cannot get data.")
+    else:
+        dataType = json.loads(datatype_str)
+        return dataFunctionDict[dataType[0]](title, content,dataType)
+
+
+
+
+def getString(title, content,dataType):
+
+
+    pass
+def getInt(title, content,dataType):
+    pass
+def getFloat(title, content,dataType):
+    pass
+def getRange(title, content,dataType):
+    pass
+def getChoice(title, content,dataType):
+    pass
+def getTime(title, content,dataType):
+    pass
+
+
+################################################################################
+# RUN - ACTUAL                                                                 #
+################################################################################
+
+
+
+
+
+logs = main.read("Logs.xml")
+
+
+
+# List of form [(name1, option),
+#               (name2,[(name2a,option),(name2b,option)],
+#               (name3,option)]
+
+menu = main.Choice(
+    [("Add new log entry", addEntry),                                    # not yet
+     ("Add or edit a log template",
+      [("Add log template", addNewLog),
+       ("Edit log template",
+        [("Edit template location within data structure", moveLog),      # not yet
+         ("Edit fields of log", editLog)])]),
+     ("View log data", viewData),                                        # not yet
+     ("Quit", quitProgram)])
+
+
+
+state = LoggerState(menu,logs)
+
+mainMenu(state)
+
+
+
+
+
+
+
+
+"""
+
+globalButtons = {}
+
+current = selectLeaf(menu)
+print "User selected:", current
+
+
+
+while True:
+    graphics.draw(state)
+    try:
+        userIn = input()
+    except:
+        userIn = None
+    state = findNewState(state,userIn)
+    if isinstance(state.currentM,main.Leaf) and isinstance(state.currentL,main.Leaf):
+        break
+
+
+        datatypeList = json.loads(field.datatype)
+        current = {'key': field.key(),
+                   'datatype': datatypeList[0],
+                   'typeData': datatypeList[1],
+                   'hidden': field.hidden,
+                   'optional': field.optional,
+                   'default': field.default,
+                   'helpStr': field.help}
+
+
+"""
