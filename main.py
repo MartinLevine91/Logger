@@ -438,7 +438,7 @@ class Time:
         return '<Time %d>' %  (self.time,)
 
     def __str__(self):
-        return time.asctime(time.localtime(self.time))
+        return time.strftime('%Y-%m-%d %H:%M', time.localtime(self.time))
 
     def previous(self, days=None, hours=None, minutes=None):
         delta = 0
@@ -465,6 +465,24 @@ class Time:
 def now():
     return Time(time.mktime(time.localtime()))
 
+def parse_time(string):
+    for fmt in ('%Y-%m-%d %H:%M', '%H:%M', '%Y-%m-%d'):
+        try:
+            struct_time = time.strptime(string, fmt)
+            if struct_time.tm_year == 1900:
+                list_time = list(struct_time)
+                today = list(time.localtime())
+                for i in range(0,3):
+                    list_time[i] = today[i]
+                struct_time = time.struct_time(tuple(list_time))
+            return Time(time.mktime(struct_time))
+        except:
+            pass
+    complain('Cannot parse \"%s\" as a date / time.' % (string,))
+
+def now():
+    return Time(time.mktime(time.localtime()))
+
 
 def validDatatype(datatype, typeArgs):
     # datatype is a string such as "Int"
@@ -483,7 +501,7 @@ def validDatatype(datatype, typeArgs):
 
     elif datatype == "Choice":
         try:
-            if isinstance(choiceList,list):
+            if isinstance(typeArgs,list):
 
                 choiceList = Choice(typeArgs)
                 if len(typeArgs) > 0:
@@ -495,6 +513,8 @@ def validDatatype(datatype, typeArgs):
             return False
 
     elif datatype == "Time":
+        if not isinstance(typeArgs,list):
+            return False
         if typeArgs[0] in ["Minute","Hour","Day","Month","Year"]:
             return True
         else:
@@ -502,8 +522,63 @@ def validDatatype(datatype, typeArgs):
 
     return False
 
+def validField(field):
+
+    if not validString(field.key()):
+        return False
+    elif not validDatatype(field.datatype,field.typeArgs):
+        return False
+    elif not isinstance(field.hidden, bool):
+        return False
+    elif not isinstance(field.optional, bool):
+        return False
+    elif not validString(field.help):
+        return False
+    else:
+        if field.optional:
+            if field.default == None:
+                return False
+        else:
+            field.default = None
+            return True
+
+
+def validString(string):
+    if isinstance(string, str):
+        for item in ["%", "/n"]:
+            if item in string:
+                return False
+        return True
+    else:
+        return False
 
 def validFieldEntry(entry, datatype,typeArgs):
+    if validDatatype(datatype,typeArgs):
+        if dataType == "String":
+            return validString(entry)
+        elif dataType == "Int":
+            return isinstance(entry, int)
+        elif dataType == "Float":
+            return isinstance(entry,float)
+        elif dataType == "Choice":
+            return validString(entry)
+        elif dataType == "Range":
+            if isinstance(entry, int) or isinstance(entry, float):
+                if entry > typeArgs[0] and entry < typeArgs[1]:
+                    return True
+                else:
+                    return False
+            else:
+                return False
+        elif dataType == "Time":
+            if isinstance(entry, Time):
+                return True
+            else:
+                return False
+
+    else:
+        complain("Invalid datatype!")
+    
     pass
 
 class Choice:
