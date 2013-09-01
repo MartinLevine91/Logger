@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 STARTING SIMPLE
 
@@ -569,4 +570,141 @@ key,datatype,hidden,optional,help
     fieldList[-1] = fieldList[-1][:-1] + '"'
 
     return fieldList
+
+
+def drawRecentData(field, priorityCol = 0, maxHeight = WINDOW_HEIGHT, maxWidth= WINDOW_WIDTH, drawHidden = False, drawDeleted = False):
+    pass
+"""
+Okay, so to do this table, first write a general table writer from listoflists
+Once basic done, add the following features:
+*Optional to display title
+*MaxWidth (first general, then col by col)
+*Priority col (as in centre around if it there's not room for the whole table even at minWidths)
+*maxheight, priority height
+
+
+
+
+
+
+Okay, so there is a confusion here between different options. Minimum widths and priority col work on different systems.
+I could double them up, but don't think it's worth it
+
+
+for each col:
+
+
+The maximum natural width => N
+The setting for maxwidth  => +
+The width of the column   => W
+
+W is maximized under the following constraints:
+
+W < N
+W < +
+
+
+
+
+
+maxWidth (global or dict)
+actualLength (global or dict)
+minWidth (global or dict)
+
+
+
+priority col
+
+expand equally from both directions, if you hit one side, stop and expand the other way.
+
+___!!!!!????????!!!!!__________
+0120123401234567012340123456789
+preLength - spare = 8-5 = 3
+postLength - spare =
+
+
+
+
+
+
+
+"""
+def drawTableFromListOfLists(data):
+    maxLength = {}
+    title = "Full"
+    maxWidth_global = 5
+    maxWidth_dict = {3:10}
+    maxTotalWidth = 40
+    centralCol = 4
+
+
+    
+
+    for k in range(len(data)):
+        if k !=0 or title == "Full":                
+            row = data[k]
+            for i in range(len(row)):
+                    if i not in maxLength:
+                        maxLength[i] = 0
+                    cell = row[i]
+                    maxLength[i] = max(len(str(cell)),maxLength[i])
+                    if i in maxWidth_dict:
+                        maxWidth = maxWidth_dict[i]
+                    else:
+                        maxWidth = maxWidth_global
+                    maxLength[i] = min(maxLength[i],maxWidth)
+        
+    print maxLength
+
+    rows = []
+
+    for rowList in data:
+        rowText = "|"
+        for i in range(len(rowList)):
+            rowText += cutTo(str(rowList[i]),maxLength[i]) + "|"
+
+        rows.append(rowText)
+
+    cut, add = findCut(maxLength, centralCol, maxTotalWidth)
+    print "Cut:", cut
+    for i in range(len(rows)):
+        rows[i] = add[0] + rows[i][cut[0]:cut[1]] + add[1]
+    
+
+    if title == "None":
+        rows = rows[1:]
+
+    for row in rows:
+        print row
+        
+
+def findCut(maxLength, centralCol, maxTotalWidth):
+
+    preLength = 1
+    
+    for i in range(centralCol):
+        preLength += maxLength[i] + 1
+
+    centralLength = maxLength[centralCol]
+
+    postLength = 1
+    for i in range(centralCol+1,max(maxLength)+1):
+        postLength += maxLength[i] + 1
+
+    print preLength, centralLength,postLength, maxTotalWidth
+
+    if centralLength > maxTotalWidth - 6:
+        main.complain("haven't accounted for this...")
+    if preLength + centralLength + postLength < maxTotalWidth:
+        return((0,maxTotalWidth),("",""))
+    if preLength * 2 + centralLength + 3 <= maxTotalWidth:
+        return((0,maxTotalWidth-3),("","..."))
+    if postLength * 2 + centralLength + 3 <= maxTotalWidth:
+        return((-maxTotalWidth+3,preLength + centralLength + postLength),("...",""))
+    else:
+        spare_R = (maxTotalWidth - centralLength - 6)/2
+        spare_L = (maxTotalWidth - centralLength - 6) - spare_R
+        print "!"
+        
+        return((preLength-spare_L, spare_R-postLength),( "...","..."))
 
