@@ -1,4 +1,30 @@
 """
+Things that need doing before alpha:
+
+UI:
+UI needs to be able to process floats!
+
+edit_field:
+
+- default: not started
+- when type is changed if there is a default value, that default value should be set to None. The same should happen if type-args change and make the default invalid.
+-- need test for valid values
+
+add_log_entry:
+- not started
+
+Need to talk to dad about "Time" class
+
+Things that need doing at some point:
+
+- Lists longer than one screen height need to be handled in some fashion.
+  Probably with navigation between sets of around ten.
+- Very long strings also need some kind of navigation to be viewed properly.
+- Print out two lines of "-" after every UI entered and before each new screen.
+  (To make it easier to seperate debug info from UI)
+
+
+
 This module:
 * Keeps track of program state
 * Interprets user inputs, sending some through main.py
@@ -86,6 +112,7 @@ import main
 import graphics
 import json
 
+import time
 
 
 
@@ -134,7 +161,12 @@ class LoggerState:
 
 def userInput():
     try:
-        userIn = raw_input()
+        if (not FOLLOW_PRESETS) or not USER_INPUT_PRESETS:
+            userIn = raw_input()
+        else:
+            userIn = USER_INPUT_PRESETS.pop(0)
+            time.sleep(DELAY_TIMER)
+            print userIn
         try:
             userIn = int(userIn)
         except:
@@ -153,6 +185,12 @@ def userInput():
         main.complain("Got kill request")
     return userIn
 
+
+
+
+FOLLOW_PRESETS = True
+USER_INPUT_PRESETS = ["2","2","2","1","1","1","2","4","Done"]
+DELAY_TIMER = 0.2
 
 
 
@@ -313,28 +351,52 @@ def editField(oldField, leaf):
         if isinstance(slotToEdit, int):
             if slotToEdit == 0:
                 # Save newField
-                if oldField:
-                    oldField.remove()
-                newField.move(leaf = leaf)
-            return slotToEdit
+                # This should only happen if the field is completely valid!
+                # Also, won't this delete all the old data?!
+                if main.validField(newField):
+                        
+                    if oldField:
+                        oldField.remove()
+                    newField.move(leaf = leaf)
+                    
+                    return slotToEdit
+                else:
+                    while True:
+                        graphics.askYesNo("The field %s cannot be saved in it's current state, would you still "
+                                          "like to quit (and lose any changes you've made)?" % (newField.key(),))
+                        UI = userInput()
+                        if isinstance(UI, str):
+                            if UI.lower() in ["y","yes"]:
+                                return slotToEdit
+                            if UI.lower() in ["n","no"]:
+                                break
+            else:
+                return slotToEdit
 
-        if slotToEdit == "key":
-            editField_setKey(newField, fieldTable)
+        slotFunctionDict = {
+            "key"       :editField_setKey,
+            "datatype"  :editField_setDatatype,
+            "type data" :editField_setTypeArgs,
+            "hidden"    :editField_setHidden,
+            "optional"  :editField_setOptional,
+            "default"   :editField_setDefault,
+            "help"      :editField_setHelp}
+            
 
-        elif slotToEdit == "datatype":
-            editField_setDatatype(newField, fieldTable)
-
-        elif slotToEdit == "type data":
-            editField_setTypeArgs(newField, fieldTable)
+        if slotToEdit in slotFunctionDict:
+            slotFunctionDict[slotToEdit](newField,fieldTable)
 
     graphics.drawNotYetProgrammed()
     userInput()
     return 0
 
 
+
 def editField_pickSlot(slotToEdit, oldField, newField, leaf, typesWithData):
     "Return a string, or an int meaning a quit."
     originalSlotToEdit = slotToEdit
+    i = 0
+    
     while True:
         slotToEdit = editField_pickSlot_default(slotToEdit, newField, typesWithData)
 
@@ -361,6 +423,7 @@ def editField_pickSlot(slotToEdit, oldField, newField, leaf, typesWithData):
         graphics.drawWindow(["Editing field '%s'" %(newField.key(),)], fullContent, inst_whatNext, ["$ "])
 
         slotToEdit = editField_pickSlot_askUser(shift, slotToEdit)
+
         if slotToEdit is not None:
             return slotToEdit, fieldTable
         else:
@@ -442,11 +505,12 @@ def editField_pickSlot_askUser(shift, default):
 
 # FIELD SLOT SETTERS
 
-def editField_drawAndUI(title, text, fieldTable):
-    splitText = graphics.splitToWidth(text)
-    maxLenFieldTable = graphics.WINDOW_HEIGHT - len(splitText) - 5
+def editField_drawAndUI(titleStr, instStr, fieldTable):
+    fullInst = graphics.splitToWidth(instStr)
+    maxLenFieldTable = graphics.WINDOW_HEIGHT - len(fullInst) - 5
     fullContent = fieldTable[:maxLenFieldTable]
-    graphics.drawWindow([title], fullContent, splitText, ["$"])
+    title = graphics.splitToWidth(titleStr)
+    graphics.drawWindow(title, fullContent, fullInst, ["$"])
     return userInput()
 
 def editField_drawAndUI_optionList(title, head, choices, tail, fieldTable):
@@ -463,7 +527,6 @@ def editField_setKey(field, fieldTable):
         UI = editField_drawAndUI("Editing key for field '%s'" %(key,),
                              "Enter new key, or press enter leaving the input blank to leave the key as it was.",
                              fieldTable)
-        print UI
         if isinstance(UI, str):
             key = UI
             break
@@ -512,7 +575,7 @@ def editField_setTypeArgs(field, fieldTable):
     if datatype == "Range":
         editField_setTypeArgs_range(field, fieldTable)
     elif datatype == "Choice":
-        pass
+        editField_setTypeArgs_choice(field, fieldTable)
     elif datatype == "Time":
         editField_setTypeArgs_time(field, fieldTable)
     else:
@@ -603,11 +666,74 @@ def editField_setTypeArgs_time(field, fieldTable):
         field.typeArgs = [time]
 
 def editField_setTypeArgs_choice(field,fieldTable):
-    choiceList = field.typeArgs
+    choice = main.Choice(field.typeArgs)
+    if choice.choiceList == None:
+        choice = main.Choice([])
+    titlePreStr = "Editing field %s - editing choice list - " % (field.key(),)
+    choiceListEditor(choice, False, titlePreStr)
+    field.typeArgs = choice.choiceList
 
     # ML 2013-07-20 Working on choice navigation before continuing this.
 
-    
+def editField_setHidden(field,fieldTable):
+    titleStr = "Setting hidden for field '%s'" % (field.key(),)
+    instStr = "To set hidden as true, enter 't' or 'true', to set hidden as false enter 'f' or 'false'. Alternately, press enter leaving the input blank to leave hidden as is. Hidden fields are not visible entering logs, but past data is not lost and the field can be unhidden at any time."
+    while True:
+        UI =  editField_drawAndUI(titleStr, instStr, fieldTable)
+        if isinstance(UI, str):
+            if UI.lower() in ['t','true']:
+                field.hidden = True
+                break
+            elif UI.lower() in ['f','false']:
+                field.hidden = False
+                break
+        elif UI == None:
+            break
+    return 0
+        
+
+def editField_setOptional(field,fieldTable):
+    titleStr = "Setting optional for field '%s'" % (field.key(),)
+    instStr = "To set optional as true, enter 't' or 'true', to set optional as false enter 'f' or 'false'. Alternately, press enter leaving the input blank to leave optional as is. Optional fields have a default value which they are set to unless specified otherwise."
+    while True:
+        UI =  editField_drawAndUI(titleStr, instStr, fieldTable)
+        if isinstance(UI, str):
+            if UI.lower() in ['t','true']:
+                field.optional = True
+                break
+            elif UI.lower() in ['f','false']:
+                field.optional = False
+                break
+        elif UI == None:
+            break
+    return 0
+
+def editField_setDefault(field,fieldTable):
+    pass
+
+def editField_setHelp(field,fieldTable):
+    helpStr = field.help
+    fieldTable = graphics.drawField(field,None,graphics.WINDOW_WIDTH, graphics.WINDOW_HEIGHT)
+    while True:
+        UI = editField_drawAndUI("Editing help for field '%s'" %(field.key(),),
+                             "Enter new help string, or press enter leaving the input blank to leave the help string as it was.",
+                             fieldTable)
+        if isinstance(UI, str):
+            helpStr = UI
+            break
+        elif UI == None:
+            if helpStr == None:
+                if editField_confirmLeaveBlank('help'):
+                    break
+            else:
+                # NDL 2013-07-15 -- This is not allowed.
+                # Martin 2013-07-18 -- ?? Yes it is. This should leave key as it was, as per instructions given above.
+                break
+    if helpStr:
+        field.help = helpStr
+
+
+
 def editField_confirmLeaveBlank(what):
     while True:
         graphics.askYesNo("Do you wish to leave the %s blank? If you do so you won't be able to save the field." % (what,))
@@ -617,6 +743,8 @@ def editField_confirmLeaveBlank(what):
                 return True
             if UI.lower() in ["n","no"]:
                 return False
+
+
 
 def viewData(state):
     graphics.drawNotYetProgrammed()
@@ -636,6 +764,7 @@ def quitProgram(state):
             break
     state.logs.write("Logs.xml")
     return -1
+
 
 def askConfirmString(key, titleInsert = None):
     questionDict = {
@@ -699,152 +828,121 @@ navigate choice will exist in two places:
 As there are just those two, probably the best solution is not to abstract much but to add some logic and different titles. First neaten it up though.
 
 
+Okay, so should abstract the graphics.
+
+
+Give title, the choice, list of Qs, instr
+
+
 
 """
+# At no point have I dealt with the prospect of things that cannot be fit on the screen (i.e. a choice list that has 50 items on the first tier) This'll need to be fixed before too long.
 
 
-def simple_editChoice(choice = None):
+
+def choiceListEditor(choice, pickChoice = True, titlePreStr = "Choice List Editor - "):
     """
-    Will only exit once you have selected a choice. 
-    Navigation
-    Sibling
-    Child
-    Name Change
-    Delete
+   Title format:
 
+Editing field _________ - editing choice list - ~/a/b
+
+Adding to log _________ - selecting choice for field __________ - ~/a/b
     """
-    
-    if choice == None:
-        choice = main.Choice([])
+
+    possibleOptions = [ 
+        "Back",
+        "Add a choice to this list",
+        "Add a sub-choice to one of the choices on this list",
+        "Change the name of one of the choices on this list",
+        "Delete one of the choices on this list, along with any sub-choices",
+        "Add a sub-choice to %s",
+        "Change the name of %s",
+        "Delete %s, along with any sub-choices",
+        "Finish editing choice list"]
+
     while True:
-        print ""
-        print ""
-        print ""
-        print ""
-        print ""
+
+        currentOptions = [False,
+                          False,
+                          False,
+                          False,
+                          False,
+                          False,
+                          False,
+                          False,
+                          (not pickChoice)]
+
+        listOfOptions = []
+        """
+draw and ask
+interpret
+do thing
+        """
+        print "!"
+        print choice.choiceList
+        print "!"
+        
         if choice.choiceList == []:
-            print "1. Add a choice to this list"
-            print "This choice list is currently empty, so your only option is to enter a choice."
-            print "$ ",
-            UI = userInput()
-            if isinstance(UI, int):
-                if UI == 1:    
+            # Deal with empty choice list.
+
+            # Set avaialble options, build graphics, and ask for UI
+            
+            currentOptions[1] = True
+
+            for i in range(len(possibleOptions)):
+                if currentOptions[i]:
+                    listOfOptions.append(possibleOptions[i])
+
+            titleStr = titlePreStr + choice.filePath()
+
+            if pickChoice:
+                instStr = "This choice list is currently empty, so your only option is to create a new choice."
+            else:
+                instStr = "This choice list is currently empty, so either create a new choice or quit editing."
+
+            n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+
+            # Respond to UI
+            if isinstance(UI,int):
+                if UI == 1:
                     newName = askConfirmString("NameNewChoice")
                     if newName:
                         choice.choiceList = [[newName,newName]]
                         choice.keyList = []
                         choice.updateCurrentList()
+                if UI == 2 and not pickChoice:
+                    break
                 
-        elif isinstance(choice.currentChoiceList,list):
-            n = len(choice.currentChoiceList)
-            for i in range(n):
-                print str(i + 1) + ". " + choice.currentChoiceList[i][0]
-            print str(n + 1) + ". Back"
-            print str(n + 2) + ". Add an choice to this list"
-            print str(n + 3) + ". Add a sub-choice to one of the choices on this list"
-            print str(n + 4) + ". Change the name of one of the choices"
-            print str(n + 5) + ". Delete one of the choices and any sub-choices it has"
+        elif not isinstance(choice.currentChoiceList,list):
+        
+
+            # Set avaialble options, build graphics, and ask for UI
+            currentOptions[0] = True
+            currentOptions[5:8] = [True,]*3
+
+            for i in range(len(possibleOptions)):
+                if currentOptions[i]:
+                    listOfOptions.append(possibleOptions[i])
+
             
-            print "Pick an option from above."
-            print "$ ",
-            UI = userInput()
-            if isinstance(UI, int):
-                if UI > 0 and UI < n + 2:
-                    choice.pickChoice(UI)
-                elif UI == n + 2:
-                    newName = askConfirmString("NameNewChoice")
-                    if newName:
-                        choice.addChoice_sibling(newName,newName)
-                elif UI == n + 3:
-                    while True:
-                        print '\n' * 5
-                        print "Which choice would you like to add a sub-choice to?"
-                        for i in range(n):
-                            print str(i + 1) + ". " + choice.currentChoiceList[i][0]
-                        print str(n + 1) + ". Do not add a sub-choice"
-                        print "$ ",
-                        UI = userInput()
-                        if isinstance(UI, int):
-                            if UI > 0 and UI < n + 1:
-                                key = UI
-                                newName = askConfirmString("NameNewChildChoice", choice.currentChoiceList[UI-1][0])
-                                if newName:
-                                    choice.addChoice_child(key,newName,newName)
-                                break
-                            elif UI == n + 1:
-                                break
-                elif UI == n + 4:
-                     while True:
-                        print '\n' * 5
-                        print "Which choices would you like to change the name of"
-                        for i in range(n):
-                            print str(i + 1) + ". " + choice.currentChoiceList[i][0]
-                        print str(n + 1) + ". Do not change the name of any of the choices."
-                        print "$ ",
-                        UI = userInput()
-                        if isinstance(UI, int):
-                            if UI > 0 and UI < n + 1:
-                                key = UI
-                                newName = askConfirmString("RenameChoice", choice.currentChoiceList[UI-1][0])
-                                if newName:
-                                    if isinstance(choice.currentChoiceList[UI-1][1], list):
-                                        choice.changeName(UI, newName)
-                                    else:
-                                        choice.currentChoiceList[UI-1] = [newName, newName]
-                                break
-                            elif UI == n + 1:
-                                break                   
-                elif UI == n + 5:
-                    while True:
-                        print '\n' * 5
-                        print "Which choice would you like to delete?"
-                        for i in range(n):
-                            print str(i + 1) + ". " + choice.currentChoiceList[i][0]
-                        print str(n + 1) + ". Do not delete a choice"
-                        print "$ ",
-                        key = userInput()
-                        if isinstance(key, int):
-                            if key > 0 and key < n + 1:
-                                while True:
-                                    graphics.askYesNo("Are you sure you want to delete %s and all sub-choices?" %(choice.currentChoiceList[key-1][0],))
-                                    UI = userInput()
-                                    if isinstance(UI,str):
-                                        if UI.lower() in ["y","yes"]:
-                                            if len(choice.currentChoiceList) > 1:
-                                                choice.currentChoiceList.pop(key-1)
-                                            elif len(choice.keyList) > 0:
-                                                key = choice.keyList[-1]
-                                                choice.keyList.pop()
-                                                choice.updateCurrentList()
-                                                choice.currentChoiceList[key][1] = choice.currentChoiceList[key][0]
-                                                choice.pickChoice(key+1)
-                                                
-                                            else:
-                                                choice.choiceList = []
-                                            break
-                                        if UI.lower() in ["n","no"]:
-                                            break
-                                break
-                            elif UI == n + 1:
-                                break
-                                
-                        # Option currently has no children.
-                        # Option already has children.
-                        
-                        
-                        
-        else:
-            print "1. Back"
-            print "2. Add a sub-choice"
-            print "3. Change the name of this choice"
-            print "4. Delete this choice"
-            print "To confirm your selection of %s, press enter leaving the input blank. Otherwise, select from the options above." % (str(choice.currentChoiceList),)
-            print "$ ",
-            UI = userInput()
-            if UI == None:
-                print str(choice.currentChoiceList)
-                break
-            elif isinstance(UI, int):
+            if pickChoice:
+                instStr = "Press enter to confirm your selection of %s, or select from one of the options above." % (str(choice.currentChoiceList),)
+                titleStr = titlePreStr + choice.filePath() + " - confirm selection"
+
+            else:
+                instStr = "Select from the options above."
+                titleStr = titlePreStr + choice.filePath()
+
+            
+            n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+            if n != 0:
+                main.complain("huh")
+            
+            #Respond to UI
+            if UI == None and pickChoice:
+                print "Have picked %s" % (str(choice.currentChoiceList),)
+                return choice.currentChoiceList
+            elif isinstance(UI,int):
                 if UI == 1:
                     choice.pickChoice(1)
                 elif UI == 2:
@@ -886,14 +984,161 @@ def simple_editChoice(choice = None):
                                 break
                             if UI.lower() in ["n","no"]:
                                 break
-                
-    print choice.choiceList
-c = main.Choice([["a","a"],["b", [["ba","ba"],["bb","bb"]]],["c", "c"]])
-simple_editChoice(c)
+                elif UI == 5 and not pickChoice:
+                    break
+        else:
+             # Set avaialble options, build graphics, and ask for UI
+            if len(choice.keyList)> 0:
+                shift = 1
+                currentOptions[0] = True
+            else:
+                shift = 0
+            currentOptions[1:5] = [True,]*4
+
+            for i in range(len(possibleOptions)):
+                if currentOptions[i]:
+                    listOfOptions.append(possibleOptions[i])
+
+            titleStr = titlePreStr + choice.filePath()
+            instStr = "Select from the options above."
+
+            n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
+            
+            #Respond to UI
+            if isinstance(UI, int):
+                if UI > 0 and UI < n + 1 + shift:
+                    choice.pickChoice(UI)
+                elif UI == n + 1 + shift:
+                    newName = askConfirmString("NameNewChoice")
+                    if newName:
+                        choice.addChoice_sibling(newName,newName)
+                elif UI == n + 2 + shift:
+                    while True:
+                        titleStr = titlePreStr + choice.filePath() + " - adding sub-choice"
+                        instStr = "Select a choice to add a sub-choice to."
+                        listOfOptions = ["Do not add a sub-choice",]
+
+                        n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
+                        
+                        if isinstance(UI, int):
+                            if UI > 0 and UI < n + 1:
+                                key = UI
+                                newName = askConfirmString("NameNewChildChoice", choice.currentChoiceList[UI-1][0])
+                                if newName:
+                                    choice.addChoice_child(key,newName,newName)
+                                break
+                            elif UI == n + 1:
+                                break
+                elif UI == n + 3 + shift:
+                    while True:
+                        titleStr = titlePreStr + choice.filePath() + " - renaming choice"
+                        instStr = "Select a choice to rename."
+                        listOfOptions = ["Do not rename a choice.",]
+
+                        n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
+                        
+                        if isinstance(UI, int):
+                            if UI > 0 and UI < n + 1:
+                                key = UI
+                                newName = askConfirmString("RenameChoice", choice.currentChoiceList[UI-1][0])
+                                if newName:
+                                    if isinstance(choice.currentChoiceList[UI-1][1], list):
+                                        choice.changeName(UI, newName)
+                                    else:
+                                        choice.currentChoiceList[UI-1] = [newName, newName]
+                                break
+                            elif UI == n + 1:
+                                break                   
+                elif UI == n + 4 + shift:
+                    while True:
+                        titleStr = titlePreStr + choice.filePath() + " - deleting choice"
+                        instStr = "Select a choice to delete."
+                        listOfOptions = ["Do not delete a choice.",]
+
+                        n, key = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+                        
+                        if isinstance(key, int):
+                            if key > 0 and key < n + 1:
+                                while True:
+                                    graphics.askYesNo("Are you sure you want to delete %s and all sub-choices?" %(choice.currentChoiceList[key-1][0],))
+                                    UI = userInput()
+                                    if isinstance(UI,str):
+                                        if UI.lower() in ["y","yes"]:
+                                            if len(choice.currentChoiceList) > 1:
+                                                choice.currentChoiceList.pop(key-1)
+                                            elif len(choice.keyList) > 0:
+                                                key = choice.keyList[-1]
+                                                choice.keyList.pop()
+                                                choice.updateCurrentList()
+                                                choice.currentChoiceList[key][1] = choice.currentChoiceList[key][0]
+                                                choice.pickChoice(key+1)
+                                                
+                                            else:
+                                                choice.choiceList = []
+                                            break
+                                        if UI.lower() in ["n","no"]:
+                                            break
+                                break
+                            elif key == n + 1:
+                                break
+                elif UI == n + 5 + shift:
+                    
+                    break
+     
+
+
+def choiceListEditor_drawAndUI(titleStr, choice, otherOptions, instStr):
+    title = graphics.splitToWidth(titleStr)
+
+    listOfOptions = []
+    
+    if choice.choiceList == []:
+        n = 0
+    elif isinstance(choice.currentChoiceList,list):
+        n = len(choice.currentChoiceList)
+        for i in range(n):
+            listOfOptions.append(choice.currentChoiceList[i][0])
+    else:
+        n = 0
+
+    listOfOptions += otherOptions
+
+    content = []
+    for i in range(len(listOfOptions)):
+        optionStr = str(i+1) + ". " + str(listOfOptions[i])
+        if "%s" in optionStr:
+            optionStr = optionStr % (str(choice.currentChoiceList))
+        content += graphics.splitToWidth(optionStr)
+
+
+    inst = graphics.splitToWidth(instStr)
+
+    graphics.drawWindow(title, content,inst,["$"])
+    return n, userInput()
 
 
 
 
+
+    
+    
+"""        
+def editField_drawAndUI(title, text, fieldTable):
+    splitText = graphics.splitToWidth(text)
+    maxLenFieldTable = graphics.WINDOW_HEIGHT - len(splitText) - 5
+    fullContent = fieldTable[:maxLenFieldTable]
+    graphics.drawWindow([title], fullContent, splitText, ["$"])
+    return userInput()
+
+def editField_drawAndUI_optionList(title, head, choices, tail, fieldTable):
+    inst = ['%s\n' % (head,)] if head else []
+    for i in range(len(choices)):
+        inst.append(graphics.cutTo((str(i+1) + ". " + choices[i])))
+    inst = inst + [tail] if tail else inst
+    UI = editField_drawAndUI(title, ''.join(inst), fieldTable)
+    return UI
+
+"""
 
 def getData(dataType_str,title,content):
     dataFunctionDict = {
@@ -932,7 +1177,6 @@ def getTime(title, content,dataType):
 ################################################################################
 # RUN - ACTUAL                                                                 #
 ################################################################################
-
 
 
 
