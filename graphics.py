@@ -708,3 +708,13 @@ def findCut(maxLength, centralCol, maxTotalWidth):
         
         return((preLength-spare_L, spare_R-postLength),( "...","..."))
 
+
+          
+    
+    
+drawTableFromListOfLists([["#","Letters","back","num","#","Letters","back","num"],
+                         [123456,"AAAAAAAAYYYY","zededededededed","onetwoonetwothreefour",123456,"AAAAAAAAYYYY","zededededededed","onetwoonetwothreefour"],
+                          [1,"bee","y","two",1,"bee","y","two"],
+                          [2,"see","x","three",2,"see","x","three"],
+                          [3,"dee","w","four",3,"dee","w","four"]])
+
