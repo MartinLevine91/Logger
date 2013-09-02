@@ -1,14 +1,11 @@
 """
 Things that need doing before alpha:
 
-UI:
-UI needs to be able to process floats!
 
 edit_field:
 
 - default: not started
-- when type is changed if there is a default value, that default value should be set to None. The same should happen if type-args change and make the default invalid.
--- need test for valid values
+Untested - when type is changed if there is a default value, that default value should be set to None. The same should happen if type-args change and make the default invalid.
 
 add_log_entry:
 - not started
@@ -168,15 +165,21 @@ def userInput():
             time.sleep(DELAY_TIMER)
             print userIn
         try:
-            userIn = int(userIn)
+            userIn = float(userIn)
+            print "Dif:", abs(int(userIn+0.5)-userIn)
+            if abs(int(userIn + 0.5)-userIn) < 0.00001:
+                userIn = int(userIn+0.5)
         except:
             try:
                 # NDL 2013-07-14 -- raw_input() always returns a
                 # string, so str() and the enclosing try: are
                 # unnecessary.
                 userIn = str(userIn)
+                if not main.validString(userIn):
+                    userIn = None
                 if userIn == "":
                     userIn = None
+                    
             except:
                 userIn = None
     except:
@@ -189,7 +192,7 @@ def userInput():
 
 
 FOLLOW_PRESETS = True
-USER_INPUT_PRESETS = ["2","2","2","1","1","1","2","4","Done"]
+USER_INPUT_PRESETS = ["2","2","2","1","1","1","1",""]
 DELAY_TIMER = 0.2
 
 
@@ -539,6 +542,7 @@ def editField_setKey(field, fieldTable):
                 # Martin 2013-07-18 -- ?? Yes it is. This should leave key as it was, as per instructions given above.
                 break
     if key:
+        print "KEY:   ", key
         field.move(key=key)
 
 def editField_setDatatype(field, fieldTable):
@@ -546,7 +550,7 @@ def editField_setDatatype(field, fieldTable):
 
     datatype = field.datatype
     typeArgs = field.typeArgs
-
+    default = field.default
     while True:
         UI = editField_drawAndUI_optionList("Picking datatype for field '%s'" % (field.key(),),
                     "Choose from the following options for datatype:",
@@ -559,6 +563,7 @@ def editField_setDatatype(field, fieldTable):
                 if typeList[UI-1] != datatype:
                     datatype = typeList[UI-1]
                     typeArgs = None
+                    default = None
                 break
         elif UI == None:
             if datatype == None:
@@ -568,6 +573,7 @@ def editField_setDatatype(field, fieldTable):
                 break
     field.datatype = datatype
     field.typeArgs = typeArgs
+    field.default = default
 
 
 def editField_setTypeArgs(field, fieldTable):
@@ -581,6 +587,9 @@ def editField_setTypeArgs(field, fieldTable):
     else:
         # Shouldn't get here
         main.complain("%s has no type data" %(datatype,))
+
+    if not validFieldEntry(field.default,datatype,field.typeArgs):
+        field.default = None
 
 def editField_setTypeArgs_range(field, fieldTable):
     def requestExtremum(which):
@@ -710,6 +719,7 @@ def editField_setOptional(field,fieldTable):
 
 def editField_setDefault(field,fieldTable):
     pass
+    
 
 def editField_setHelp(field,fieldTable):
     helpStr = field.help
