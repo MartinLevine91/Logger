@@ -11,6 +11,10 @@ add_log_entry:
 - not started
 
 Need to talk to dad about "Time" class
+- between midnight and 1AM, (prob only during summer time) rounds back to previous day...
+
+
+save - need to have back-ups writes of most recent save of each day
 
 Things that need doing at some point:
 
@@ -111,6 +115,13 @@ import json
 
 import time
 
+FOLLOW_PRESETS = True
+RECORD_INPUTS = True
+USER_INPUT_PRESETS =[2,2,2,1,1]
+USER_INPUT_RECORDING = []
+DELAY_TIMER = 0.3
+
+
 
 
 def selectNodeChild(current,userIn):
@@ -166,7 +177,6 @@ def userInput():
             print userIn
         try:
             userIn = float(userIn)
-            print "Dif:", abs(int(userIn+0.5)-userIn)
             if abs(int(userIn + 0.5)-userIn) < 0.00001:
                 userIn = int(userIn+0.5)
         except:
@@ -184,6 +194,12 @@ def userInput():
                 userIn = None
     except:
         userIn = None
+    if RECORD_INPUTS == True:
+        str_UI = str(userIn)
+        if str_UI == "None":
+            str_UI = ""
+        USER_INPUT_RECORDING.append(str(userIn))
+        print "Recorded input so far:", USER_INPUT_RECORDING
     if isinstance(userIn, str) and userIn.lower() == "kill program":
         main.complain("Got kill request")
     return userIn
@@ -191,9 +207,6 @@ def userInput():
 
 
 
-FOLLOW_PRESETS = True
-USER_INPUT_PRESETS = ["2","2","2","1","1","1","1",""]
-DELAY_TIMER = 0.2
 
 
 
@@ -219,8 +232,151 @@ def mainMenu(state):
 
 
 def addEntry(state):
+
+# Pick Leaf
+    while not isinstance(state.currentL, main.Leaf):
+        if state.currentL == None:
+            state.currentL = state.logs
+        graphics.drawPickLog("AddEntry",state)
+        UI = userInput()
+        if isinstance(UI,int):
+            if UI-1 < len(state.currentL.children()):
+                state.currentL = state.currentL.children()[UI-1]
+            # Hack to take us up one level.
+            elif UI-1 == len(state.currentL.children()):
+                state.currentL = state.currentL.parent()
+                if state.currentL == None:
+                    # We went up so many levels we have to stop now.
+                    state.currentL = state.logs
+                    return 0
+# Add entry
+
+
+    for i in range(len(state.currentL.fields())):
+        graphics.drawRecentData(state.currentL,i,drawHidden = True, drawDeleted = True)
+        print "!!!"
+        print "!"
+        print "!!!"
+
+    log = state.currentL
+    fields = log.fields()
+    
+    fieldsTable = graphics.TableOfFields(log, graphics.WINDOW_WIDTH)
+
+
+    cont = "Start"
+    count = 0
+    partialEntry = {}
+
+
+    while True:
+        if cont == "Start":
+            titleStr = "Adding entries to %s" % (log.key(),)
+            instStr = "To start adding an entry, press enter leaving the input blank. Alternatively enter 'Done' to stop adding entries or 'Quit' to save and quit the Logger."
+            title = [graphics.cutTo(titleStr),]
+            inst = graphics.splitToWidth(instStr)
+            spare = graphics.WINDOW_HEIGHT - 6 - len(inst)
+            maxLenFieldsTable = min(spare * 2 / 3, len(fieldsTable))
+            maxLenDataTable = spare - maxLenFieldsTable
+
+            dataTable = graphics.drawRecentData(leaf = log,maxHeight = maxLenDataTable)
+            graphics.drawWindow(title,fieldsTable[:maxLenFieldsTable] + [graphics.WINDOW_WIDTH * "-",] + dataTable,inst,["$ ",])
+            UI = userInput()
+
+            if UI == None:
+                cont = ["Enter",0]
+            elif isinstance(UI, str):
+                if UI.lower() in ["d","done"]:
+                    return 0
+                elif UI.lower() in ["q","quit"]:
+                    return quitProgram(state)
+        elif isinstance(cont,list):
+            if cont[0] == "Enter":
+                datatype = fields[cont[1]]
+                fieldTable = graphics.drawField(fields[cont[1]])
+
+                datatypeDict = {
+                    "String": enterData_easy,
+                    "Int"   : enterData_easy,
+                    "Float" : enterData_easy,
+                    "Range" : enterData_easy,
+                    "Choice": enterData_choice,
+                    "Time"  : enterData_time}
+                value = datatypeDict[datatype](fields[cont[1]],fieldTable)
+                if value == None:
+                    main.complain("Now how did that happen?")
+                partialEntry[field.key()] = value
+                cont[0] = "confirm"
+                
+                
+            
+
+            
+            
+
+def enterData_easy(field,fieldTable):
+    default = field.default
+    if main.validDatatype(field.datatype,field.typeArgs):
+        while True:
+            titleStr = "Entering value for field '%s'." %(field.key(),)
+            helpStr = field.helps
+            instStr = "Enter value for field '%s', invalid values will be ignored." %(field.key(),)
+            if optional:
+                instStr = instStr + " Alternatively, press enter leaving the input blank to use the default value."
+            
+            
+
+
+            if main.validFieldEntry(UI, field.datatype,field.typeArgs):
+                default = UI
+                break
+            elif UI == None:
+                break
+
+        if main.validFieldEntry(default, field.datatype,field.typeArgs):
+            field.default = default
+    else:
+        editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." %(field.key(),),
+                             "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
+                             fieldTable)
+
+def enterData_choice(field):
+    default = field.default
+    if main.validDatatype(field.datatype,field.typeArgs):
+        default = choiceListEditor(field.typeArgs,True,"Picking default value for field '%s' - selecting choice - ")
+
+        if main.validFieldEntry(default,field.datatype,field.typeArgs):
+            field.default = default
+
+    
+    else:
+        editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." %(field.key(),),
+                             "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
+                             fieldTable)
+    
+def enterData_time(field):
+    pass
+    
+        
+        
+    
+## views fields,entries, "" to cont
+### 24 - 2 title - 2 prompt, 2 lines seperating tables/inst = 20. Fields: plus table, Data: plus table, instructions 3
+
+    
+
+## entries, field, data entry
+
+## entries, options (i.e. go back one field, restart, quit)
+
+## When out of fields, entries, options (save and quit, save and new, don't save and quit, don't save and new)
+
+
+
     graphics.drawNotYetProgrammed()
     userInput()
+
+
 
 
 def addNewLog(state):
@@ -588,7 +744,7 @@ def editField_setTypeArgs(field, fieldTable):
         # Shouldn't get here
         main.complain("%s has no type data" %(datatype,))
 
-    if not validFieldEntry(field.default,datatype,field.typeArgs):
+    if not main.validFieldEntry(field.default,datatype,field.typeArgs):
         field.default = None
 
 def editField_setTypeArgs_range(field, fieldTable):
@@ -626,7 +782,7 @@ def editField_setTypeArgs_range(field, fieldTable):
                 else:
                     typeArgs = ["?",rMax]
 
-                if isinstance(rmin, int):
+                if isinstance(rMin, int):
                     if rMin < rMax:
                         cont = "False"
                     else:
@@ -718,15 +874,63 @@ def editField_setOptional(field,fieldTable):
     return 0
 
 def editField_setDefault(field,fieldTable):
-    pass
+    datatype = field.datatype
+
+    datatypeDict = {
+        "String": editField_setDefault_easy,
+        "Int"   : editField_setDefault_easy,
+        "Float" : editField_setDefault_easy,
+        "Range" : editField_setDefault_easy,
+        "Choice": editField_setDefault_choice,
+        "Time"  : editField_setDefault_time}
+
+    return datatypeDict[datatype](field,fieldTable)
     
+
+def editField_setDefault_easy(field,fieldTable):
+    default = field.default
+    if main.validDatatype(field.datatype,field.typeArgs):
+        while True:
+            UI = editField_drawAndUI("Setting default value for field '%s'." %(field.key(),),
+                             "Enter new default value, or press enter leaving the input blank to leave the default as is. Invalid values will be ignored.",
+                             fieldTable)
+            if main.validFieldEntry(UI, field.datatype,field.typeArgs):
+                default = UI
+                break
+            elif UI == None:
+                break
+
+        if main.validFieldEntry(default, field.datatype,field.typeArgs):
+            field.default = default
+    else:
+        editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." %(field.key(),),
+                             "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
+                             fieldTable)
+
+def editField_setDefault_choice(field,fieldTable):
+    default = field.default
+    if main.validDatatype(field.datatype,field.typeArgs):
+        default = choiceListEditor(field.typeArgs,True,"Picking default value for field '%s' - selecting choice - ")
+
+        if main.validFieldEntry(default,field.datatype,field.typeArgs):
+            field.default = default
+
+    
+    else:
+        editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." %(field.key(),),
+                             "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
+                             fieldTable)
+    
+def editField_setDefault_time(field,fieldTable):
+    pass
+
 
 def editField_setHelp(field,fieldTable):
     helpStr = field.help
     fieldTable = graphics.drawField(field,None,graphics.WINDOW_WIDTH, graphics.WINDOW_HEIGHT)
     while True:
         UI = editField_drawAndUI("Editing help for field '%s'" %(field.key(),),
-                             "Enter new help string, or press enter leaving the input blank to leave the help string as it was.",
+                             "Enter new help string, or press enter leaving the input blank to leave the help string as is.",
                              fieldTable)
         if isinstance(UI, str):
             helpStr = UI
@@ -773,6 +977,10 @@ def quitProgram(state):
         if UI == 1:
             break
     state.logs.write("Logs.xml")
+    nowStr = str(main.now().previous(days = 0))
+    backUpStr = "backup/Logs_" + nowStr[:10]
+    print backUpStr
+    state.logs.write(backUpStr)
     return -1
 
 
@@ -858,6 +1066,10 @@ Editing field _________ - editing choice list - ~/a/b
 
 Adding to log _________ - selecting choice for field __________ - ~/a/b
     """
+
+    if choice == None:
+        choice = main.Choice([])
+
 
     possibleOptions = [ 
         "Back",
@@ -1150,38 +1362,7 @@ def editField_drawAndUI_optionList(title, head, choices, tail, fieldTable):
 
 """
 
-def getData(dataType_str,title,content):
-    dataFunctionDict = {
-        "String":getString,
-        "Int":getInt,
-        "Float":getFloat,
-        "Range":getRange,
-        "Choice":getChoice,
-        "Time":getTime}
 
-    if not main.validDatatype(dataType_str):
-        main.complain("Invalid data type, cannot get data.")
-    else:
-        dataType = json.loads(datatype_str)
-        return dataFunctionDict[dataType[0]](title, content,dataType)
-
-
-
-
-def getString(title, content,dataType):
-
-
-    pass
-def getInt(title, content,dataType):
-    pass
-def getFloat(title, content,dataType):
-    pass
-def getRange(title, content,dataType):
-    pass
-def getChoice(title, content,dataType):
-    pass
-def getTime(title, content,dataType):
-    pass
 
 
 ################################################################################
