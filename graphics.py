@@ -7,10 +7,7 @@ STARTING SIMPLE
 ==> Feed it content, title (left part, length reducable right part),instructions, prompt
 
 
-
-
 """
-
 
 
 
@@ -230,6 +227,7 @@ def drawPickLog(key,state):
         "AddNewLog":[WINDOW_WIDTH,"Placing new log",[], "Select the location for your new log template, navigate the Node structure until you're ready to add either a branch or a leaf. Enter 'branch' or 'leaf' to add a node to the tree.","$ "],
         "AddNewLog_noLeaves":[WINDOW_WIDTH,"Placing new log",[], "Select the location for your new log template, navigate the Node structure until you're ready to add either a branch or a leaf. Enter 'branch' or 'leaf' to add a node to the tree. Oops, you just selected a leaf, you cannot attach new branches or leaves to existing leaves.","$ "],
         "EditLog":[WINDOW_WIDTH,"Selecting log to edit",[], "Navigate the Node structure and select the log template you would like to edit.","$ "],
+        "AddEntry":[WINDOW_WIDTH,"Selecting log to add entries to",[], "Navigate the Node structure and select the log you would like to add to.","$ "],
 
 
         }
@@ -247,13 +245,13 @@ def TableOfFields(leaf, maxWidth = WINDOW_WIDTH, fieldBeingEdited = None):
          1         2         3         4         5         6         7         8
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 |##|H|Key            |Type      |*|Default       |Help                         |
-                      Range 0-10
-                      Time Min
-                      Time Hour
-                      Time Day
-                      Time Mon
-                      Time Year
-                      Choices...
+                      Range 0-10| |
+                      Time Min  |
+                      Time Hour |
+                      Time Day  |
+                      Time Mon  |
+                      Time Year |
+                      Choices...|
 
 Min and default widths for variable width fields:
 
@@ -314,7 +312,10 @@ Will break if there isn't room for K,T,O at default, D,H at min.
                     dataType = "Rng " + rng
 
             elif dataType == "Time":
-                dataType = "Time " + {"Minute":"Min", "Hour":"Hour", "Day":"Day", "Month":"Mon", "Year":"Year"}[typeArgs]
+                print "TIME"
+                print typeArgs
+                print "TIME"
+                dataType = "Time " + {"Minute":"Min", "Hour":"Hour", "Day":"Day", "Month":"Mon", "Year":"Year"}[typeArgs[0]]
         except:
             dataType = "?" + dataType
 
@@ -415,7 +416,7 @@ elif >= M,M,D,D = M,M,D+,D+
     elif maxWidth >= (defLenKey + maxLenType + defLenDef + defLenHelp + 12):
         typeLen = maxLenType
         defLen = defLenDef
-        helpLen = defHelpLen
+        helpLen = defLenHelp
         keyLen = maxWidth - typeLen - defLen - helpLen - 12
 
     # K,T,D,H = D,M,m+,m+
@@ -572,8 +573,61 @@ key,datatype,hidden,optional,help
     return fieldList
 
 
-def drawRecentData(field, priorityCol = 0, maxHeight = WINDOW_HEIGHT, maxWidth= WINDOW_WIDTH, drawHidden = False, drawDeleted = False):
-    pass
+def drawRecentData(leaf, priorityCol = None,unfinishedEntry = None, maxHeight = WINDOW_HEIGHT, maxWidth= WINDOW_WIDTH, drawHidden = False, drawDeleted = False):
+    
+
+#Get field list
+
+    data = leaf.entries()
+    if isinstance(unfinishedEntry,dict):
+        data.append(unfinishedEntry)
+    
+    if drawDeleted and not drawHidden:
+        main.complain("Really? Didn't account for this...")
+
+    fieldList = []
+    fields = leaf.fields()
+    for field in fields:
+        if drawHidden or (field.hidden == False):
+            fieldList.append(field.key())
+    
+
+
+    if drawDeleted:
+        deletedFieldSet = set([])
+        for entry in data:
+            deletedFieldeSet = deletedFieldSet.union(set(entry.keys()))
+        deletedFieldList = list(deletedFieldSet)
+        deletedFieldList.sort()
+
+        for field in deletedFieldList:
+            if field not in fieldList:
+                fieldList.append(field)
+
+
+#Get data into the lists
+    rows = []
+    rows.append(fieldList)
+    for entry in data:
+        row = []
+        for field in fieldList:
+            if field in entry:
+                row.append(entry[field])
+            else:
+                row.append(None)
+        rows.append(row)
+
+    if isinstance(priorityCol,int):
+        priorityDict = {priorityCol:20}
+    else:
+        priorityDict = {}
+        priorityCol = 0
+
+
+    return drawTableFromListOfLists(rows, "Full", 10,priorityDict,maxWidth,priorityCol,maxHeight,"Top",False)
+
+
+
 """
 Okay, so to do this table, first write a general table writer from listoflists
 Once basic done, add the following features:
@@ -629,14 +683,25 @@ postLength - spare =
 
 
 """
-def drawTableFromListOfLists(data):
+def drawTableFromListOfLists(data,title,maxWidth_global,maxWidth_dict, maxTotalWidth,centralCol,maxHeight,cutFrom,highlightBottomRow=False):
     maxLength = {}
-    title = "Full"
-    maxWidth_global = 5
-    maxWidth_dict = {3:10}
-    maxTotalWidth = 40
-    centralCol = 4
 
+
+    height = len(data)
+    if title == "None":
+        maxHeight += 1
+
+    highlightLength = 0
+    if highlightBottomRow:
+        highlightLength = 2
+
+    if maxHeight - highlightLength < 2:
+        main.complain("That's not exactly a table now is it.")
+    if height > maxHeight- highlightLength:
+        if cutFrom == "Bottom":
+            data = data[:(maxHeight-highlightLength)]
+        elif cutFrom == "Top":
+            data = [data[0],] + data[-(maxHeight-highlightLength)+1:]
 
     
 
@@ -647,26 +712,28 @@ def drawTableFromListOfLists(data):
                     if i not in maxLength:
                         maxLength[i] = 0
                     cell = row[i]
-                    maxLength[i] = max(len(str(cell)),maxLength[i])
+                    if not cell == None:
+                        maxLength[i] = max(len(str(cell)),maxLength[i])
                     if i in maxWidth_dict:
                         maxWidth = maxWidth_dict[i]
                     else:
                         maxWidth = maxWidth_global
                     maxLength[i] = min(maxLength[i],maxWidth)
         
-    print maxLength
 
     rows = []
 
     for rowList in data:
         rowText = "|"
         for i in range(len(rowList)):
-            rowText += cutTo(str(rowList[i]),maxLength[i]) + "|"
+            if not rowList[i] == None:
+                rowText += cutTo(str(rowList[i]),maxLength[i]) + "|"
+            else:
+                rowText += cutTo("?",maxLength[i]) + "|"
 
         rows.append(rowText)
 
     cut, add = findCut(maxLength, centralCol, maxTotalWidth)
-    print "Cut:", cut
     for i in range(len(rows)):
         rows[i] = add[0] + rows[i][cut[0]:cut[1]] + add[1]
     
@@ -674,8 +741,9 @@ def drawTableFromListOfLists(data):
     if title == "None":
         rows = rows[1:]
 
-    for row in rows:
-        print row
+    if highlightBottomRow:
+        rows = rows[:-1] + [len(rows[0])*"-", rows[-1], len(rows[0])*"-"]
+    return rows
         
 
 def findCut(maxLength, centralCol, maxTotalWidth):
@@ -691,11 +759,10 @@ def findCut(maxLength, centralCol, maxTotalWidth):
     for i in range(centralCol+1,max(maxLength)+1):
         postLength += maxLength[i] + 1
 
-    print preLength, centralLength,postLength, maxTotalWidth
 
     if centralLength > maxTotalWidth - 6:
         main.complain("haven't accounted for this...")
-    if preLength + centralLength + postLength < maxTotalWidth:
+    if preLength + centralLength + postLength <= maxTotalWidth:
         return((0,maxTotalWidth),("",""))
     if preLength * 2 + centralLength + 3 <= maxTotalWidth:
         return((0,maxTotalWidth-3),("","..."))
@@ -711,10 +778,4 @@ def findCut(maxLength, centralCol, maxTotalWidth):
 
           
     
-    
-drawTableFromListOfLists([["#","Letters","back","num","#","Letters","back","num"],
-                         [123456,"AAAAAAAAYYYY","zededededededed","onetwoonetwothreefour",123456,"AAAAAAAAYYYY","zededededededed","onetwoonetwothreefour"],
-                          [1,"bee","y","two",1,"bee","y","two"],
-                          [2,"see","x","three",2,"see","x","three"],
-                          [3,"dee","w","four",3,"dee","w","four"]])
 
