@@ -507,6 +507,8 @@ def validDatatype(datatype, typeArgs):
                 if len(typeArgs) > 0:
                     choiceList.pickChoice(1)
                 return True
+            elif typeArgs == None:
+                return True
             else:
                 return False
         except:
@@ -545,24 +547,25 @@ def validField(field):
 
 def validString(string):
     if isinstance(string, str):
-        for item in ["%", "/n"]:
-            if item in string:
+        for item in ["%", "/n","none"]:
+            if item.lower() in string:
                 return False
         return True
     else:
         return False
 
 def validFieldEntry(entry, datatype,typeArgs):
+    
     if validDatatype(datatype,typeArgs):
-        if dataType == "String":
+        if datatype == "String":
             return validString(entry)
-        elif dataType == "Int":
+        elif datatype == "Int":
             return isinstance(entry, int)
-        elif dataType == "Float":
-            return isinstance(entry,float)
-        elif dataType == "Choice":
+        elif datatype == "Float":
+            return (isinstance(entry,float) or isinstance(entry, int))
+        elif datatype == "Choice":
             return validString(entry)
-        elif dataType == "Range":
+        elif datatype == "Range":
             if isinstance(entry, int) or isinstance(entry, float):
                 if entry > typeArgs[0] and entry < typeArgs[1]:
                     return True
@@ -570,7 +573,7 @@ def validFieldEntry(entry, datatype,typeArgs):
                     return False
             else:
                 return False
-        elif dataType == "Time":
+        elif datatype == "Time":
             if isinstance(entry, Time):
                 return True
             else:
