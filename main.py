@@ -8,7 +8,7 @@
 # * DONE Each leaf stores entries, each entry has a number of fields
 # * SEMI-DONE Define datatypes for fields
 # * Datatypes to include int, range, choice (plus subchoices?), text, timestamp
-#   DONE Timestamp (minute): now, yesterday, ... !! check this is DST-safe !!
+#   DONE Timestamp: now, yesterday, ... !! check this is DST-safe !!
 #   NOT MY PROBLEM Navigate by single keystrokes
 # * Change descriptions and add  / delete fields, on the fly
 #   Hidden data (for redundant information) - ie when a field has been removed ("hidden") from that leaf
@@ -88,12 +88,13 @@
 # str(Time) returns a string (such as 'Sun Jun 20 23:21:00 1993')
 # corresponding to such a Time.
 #
-# self.previous(days=None, hours=None, minutes=None) returns a new
-# Time which varies from self (another Time) by the stated
-# ammounts. If you give hours but not minutes, the Time will be
-# rounded back to the start of the hour; if you give days but not
-# hours the Time will be rounded back to the start of the day. For
-# example, t.previous(days=0) would give the midnight just gone; and
+# self.previous(days=None, hours=None, minutes=None, seconds=None)
+# returns a new Time which varies from self (another Time) by the
+# stated ammounts. If you give hours but not minutes, the Time will be
+# rounded back to the start of the hour (similarly with minutes but
+# not seconds); if you give days but not hours the Time will be
+# rounded back to the start of the day. For example,
+# t.previous(days=0) would give the midnight just gone; and
 # t.previous(hours=1, minutes=0) gives precisely one hour ago.
 
 bug = [
@@ -350,7 +351,10 @@ class Field():
                 self._key = key
         elif leaf is None:
             if key is not None:
-                if self._leaf.find(key):
+                already = self._leaf.find(key)
+                if already:
+                    if already == self:
+                        return
                     complain('%s already has a field called %s' % (self._leaf, key))
                 else:
                     self._key = key
@@ -431,20 +435,21 @@ def root(key = 'Everything'):
     return Root(key, None)
 
 class Time:
-    def __init__(self, time, roundto=60):
+    def __init__(self, time, roundto=1):
         self.time = int(time / roundto) * roundto
 
     def __repr__(self):
         return '<Time %d>' %  (self.time,)
 
     def __str__(self):
-        return time.strftime('%Y-%m-%d %H:%M', time.localtime(self.time))
+        return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.time))
 
-    def previous(self, days=None, hours=None, minutes=None):
+    def previous(self, days=None, hours=None, minutes=None, seconds=None):
         delta = 0
         if days: delta = delta + days * 86400
         if hours: delta = delta + hours * 3600
         if minutes: delta = delta + minutes * 60
+        if seconds: delta = delta + seconds
         new = self.time - delta
         if hours is None and days is not None:
             # Round back to midnight
@@ -459,16 +464,31 @@ class Time:
                 complain('Lost in time. And lost in space. And meaning.')
         elif minutes is None and hours is not None:
             return Time(new, 3600)
+        elif seconds is None and minutes is not None:
+            return Time(new, 60)
         else:
             return Time(new)
 
 def now():
     return Time(time.mktime(time.localtime()))
 
-def parse_time(string):
-    for fmt in ('%Y-%m-%d %H:%M', '%H:%M', '%Y-%m-%d'):
+def time_strings(accuracy):
+    """
+    Returns a tuple: a list of possible input formats, and a list of
+    examples; accuracy is one of 'Year', 'Hour', etc.
+    """
+    return {'Year':   (['%Y'], ['2013']),
+            'Month':  (['%Y-%m'], ['2013-09']),
+            'Day':    (['%Y-%m-%d'], ['2013-09-11']),
+            'Hour':   (['%H', '%Y-%m-%d %H'], ['09', '2013-09-11 09']),
+            'Minute': (['%H:%M', '%Y-%m-%d %H:%M'], ['09:32', '2013-09-11 09:32']),
+            'Second': (['%H:%M:%S', '%Y-%m-%d %H:%M:%S'], ['09:32:45', '2013-09-11 09:32:45'])
+            }[accuracy]
+
+def parse_time(string, formats):
+    for format in formats:
         try:
-            struct_time = time.strptime(string, fmt)
+            struct_time = time.strptime(string, format)
             if struct_time.tm_year == 1900:
                 list_time = list(struct_time)
                 today = list(time.localtime())
@@ -478,13 +498,14 @@ def parse_time(string):
             return Time(time.mktime(struct_time))
         except:
             pass
-    complain('Cannot parse \"%s\" as a date / time.' % (string,))
+    return 'Cannot parse "%s" as a date / time' % (string,)
 
 def now():
     return Time(time.mktime(time.localtime()))
 
 
 def validDatatype(datatype, typeArgs):
+
     # datatype is a string such as "Int"
     # typeArgs is a type-specific list
 
@@ -517,7 +538,7 @@ def validDatatype(datatype, typeArgs):
     elif datatype == "Time":
         if not isinstance(typeArgs,list):
             return False
-        if typeArgs[0] in ["Minute","Hour","Day","Month","Year"]:
+        if typeArgs[0] in ["Second","Minute","Hour","Day","Month","Year"]:
             return True
         else:
             return False
@@ -525,7 +546,6 @@ def validDatatype(datatype, typeArgs):
     return False
 
 def validField(field):
-
     if not validString(field.key()):
         return False
     elif not validDatatype(field.datatype,field.typeArgs):
@@ -540,6 +560,8 @@ def validField(field):
         if field.optional:
             if field.default == None:
                 return False
+            else:
+                return True
         else:
             field.default = None
             return True
@@ -555,7 +577,6 @@ def validString(string):
         return False
 
 def validFieldEntry(entry, datatype,typeArgs):
-    
     if validDatatype(datatype,typeArgs):
         if datatype == "String":
             return validString(entry)
@@ -578,10 +599,8 @@ def validFieldEntry(entry, datatype,typeArgs):
                 return True
             else:
                 return False
-
     else:
         complain("Invalid datatype!")
-    
     pass
 
 class Choice:
@@ -625,7 +644,7 @@ class Choice:
             filePath += "/" + tempChoiceList[key][0]
             tempChoiceList = tempChoiceList[key][1]
         return filePath
-        
+
 
     def pickChoice(self,key):
         # Pick a choice, indexing from one. If currently on a leaf choice, it assumes the wanted choice is "back"
@@ -653,7 +672,7 @@ class Choice:
             else:
                 self.currentChoiceList[key-1][1].append([newName, newOption])
 
-                
+
         else:
             complain("Something's wrong with a use of 'addChoice_child'")
 
@@ -670,4 +689,4 @@ class Choice:
         else:
             complain("Invalid call of Choice.changeOption")
 
-    
+

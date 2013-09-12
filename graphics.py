@@ -337,7 +337,7 @@ Will break if there isn't room for K,T,O at default, D,H at min.
         fieldHelp = field.help
         if fieldHelp == None:
             fieldHelp = ""
-        longRow = [hidden,key,dataType,optional,default,fieldHelp]
+        longRow = [hidden,key,dataType,optional,str(default),fieldHelp]
         fullWidthTable.append(longRow)
     """
 Finding col widths...
@@ -548,9 +548,9 @@ key,datatype,hidden,optional,help
     else:
         print "!!!!!!!!"
         print hidden
-        print "!!!!!!!!"        
+        print "!!!!!!!!"
         main.complain("invalid value for hidden")
-        
+
     if optional == True:
         oStr = "T"
     elif optional == False:
@@ -574,14 +574,14 @@ key,datatype,hidden,optional,help
 
 
 def drawRecentData(leaf, priorityCol = None,unfinishedEntry = None, maxHeight = WINDOW_HEIGHT, maxWidth= WINDOW_WIDTH, drawHidden = False, drawDeleted = False):
-    
+
 
 #Get field list
 
     data = leaf.entries()
     if isinstance(unfinishedEntry,dict):
         data.append(unfinishedEntry)
-    
+
     if drawDeleted and not drawHidden:
         main.complain("Really? Didn't account for this...")
 
@@ -590,7 +590,7 @@ def drawRecentData(leaf, priorityCol = None,unfinishedEntry = None, maxHeight = 
     for field in fields:
         if drawHidden or (field.hidden == False):
             fieldList.append(field.key())
-    
+
 
 
     if drawDeleted:
@@ -703,10 +703,10 @@ def drawTableFromListOfLists(data,title,maxWidth_global,maxWidth_dict, maxTotalW
         elif cutFrom == "Top":
             data = [data[0],] + data[-(maxHeight-highlightLength)+1:]
 
-    
+
 
     for k in range(len(data)):
-        if k !=0 or title == "Full":                
+        if k !=0 or title == "Full":
             row = data[k]
             for i in range(len(row)):
                     if i not in maxLength:
@@ -719,7 +719,7 @@ def drawTableFromListOfLists(data,title,maxWidth_global,maxWidth_dict, maxTotalW
                     else:
                         maxWidth = maxWidth_global
                     maxLength[i] = min(maxLength[i],maxWidth)
-        
+
 
     rows = []
 
@@ -736,7 +736,7 @@ def drawTableFromListOfLists(data,title,maxWidth_global,maxWidth_dict, maxTotalW
     cut, add = findCut(maxLength, centralCol, maxTotalWidth)
     for i in range(len(rows)):
         rows[i] = add[0] + rows[i][cut[0]:cut[1]] + add[1]
-    
+
 
     if title == "None":
         rows = rows[1:]
@@ -744,12 +744,12 @@ def drawTableFromListOfLists(data,title,maxWidth_global,maxWidth_dict, maxTotalW
     if highlightBottomRow:
         rows = rows[:-1] + [len(rows[0])*"-", rows[-1], len(rows[0])*"-"]
     return rows
-        
+
 
 def findCut(maxLength, centralCol, maxTotalWidth):
 
     preLength = 1
-    
+
     for i in range(centralCol):
         preLength += maxLength[i] + 1
 
@@ -772,10 +772,10 @@ def findCut(maxLength, centralCol, maxTotalWidth):
         spare_R = (maxTotalWidth - centralLength - 6)/2
         spare_L = (maxTotalWidth - centralLength - 6) - spare_R
         print "!"
-        
+
         return((preLength-spare_L, spare_R-postLength),( "...","..."))
 
 
-          
-    
+
+
 

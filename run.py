@@ -117,7 +117,7 @@ import time
 
 FOLLOW_PRESETS = True
 RECORD_INPUTS = True
-USER_INPUT_PRESETS =[2,2,2,1,1]
+USER_INPUT_PRESETS =['2', '2', '2', '1', '1', '1', '2', '6', '3', '1', '5', 't']
 USER_INPUT_RECORDING = []
 DELAY_TIMER = 0.3
 
@@ -189,7 +189,7 @@ def userInput():
                     userIn = None
                 if userIn == "":
                     userIn = None
-                    
+
             except:
                 userIn = None
     except:
@@ -260,7 +260,7 @@ def addEntry(state):
 
     log = state.currentL
     fields = log.fields()
-    
+
     fieldsTable = graphics.TableOfFields(log, graphics.WINDOW_WIDTH)
 
 
@@ -307,12 +307,12 @@ def addEntry(state):
                     main.complain("Now how did that happen?")
                 partialEntry[field.key()] = value
                 cont[0] = "confirm"
-                
-                
-            
 
-            
-            
+
+
+
+
+
 
 def enterData_easy(field,fieldTable):
     default = field.default
@@ -323,8 +323,8 @@ def enterData_easy(field,fieldTable):
             instStr = "Enter value for field '%s', invalid values will be ignored." %(field.key(),)
             if optional:
                 instStr = instStr + " Alternatively, press enter leaving the input blank to use the default value."
-            
-            
+
+
 
 
             if main.validFieldEntry(UI, field.datatype,field.typeArgs):
@@ -348,22 +348,22 @@ def enterData_choice(field):
         if main.validFieldEntry(default,field.datatype,field.typeArgs):
             field.default = default
 
-    
+
     else:
         editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." %(field.key(),),
                              "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
                              fieldTable)
-    
+
 def enterData_time(field):
     pass
-    
-        
-        
-    
+
+
+
+
 ## views fields,entries, "" to cont
 ### 24 - 2 title - 2 prompt, 2 lines seperating tables/inst = 20. Fields: plus table, Data: plus table, instructions 3
 
-    
+
 
 ## entries, field, data entry
 
@@ -513,15 +513,15 @@ def editField(oldField, leaf):
                 # This should only happen if the field is completely valid!
                 # Also, won't this delete all the old data?!
                 if main.validField(newField):
-                        
+
                     if oldField:
                         oldField.remove()
                     newField.move(leaf = leaf)
-                    
+
                     return slotToEdit
                 else:
                     while True:
-                        graphics.askYesNo("The field %s cannot be saved in it's current state, would you still "
+                        graphics.askYesNo("The field %s cannot be saved in its current state, would you still "
                                           "like to quit (and lose any changes you've made)?" % (newField.key(),))
                         UI = userInput()
                         if isinstance(UI, str):
@@ -540,7 +540,7 @@ def editField(oldField, leaf):
             "optional"  :editField_setOptional,
             "default"   :editField_setDefault,
             "help"      :editField_setHelp}
-            
+
 
         if slotToEdit in slotFunctionDict:
             slotFunctionDict[slotToEdit](newField,fieldTable)
@@ -555,7 +555,7 @@ def editField_pickSlot(slotToEdit, oldField, newField, leaf, typesWithData):
     "Return a string, or an int meaning a quit."
     originalSlotToEdit = slotToEdit
     i = 0
-    
+
     while True:
         slotToEdit = editField_pickSlot_default(slotToEdit, newField, typesWithData)
 
@@ -694,12 +694,11 @@ def editField_setKey(field, fieldTable):
                 if editField_confirmLeaveBlank('key'):
                     break
             else:
-                # NDL 2013-07-15 -- This is not allowed.
-                # Martin 2013-07-18 -- ?? Yes it is. This should leave key as it was, as per instructions given above.
+                # This should leave key as it was, as per instructions given above.
                 break
     if key:
         print "KEY:   ", key
-        field.move(key=key)
+        field._key = key
 
 def editField_setDatatype(field, fieldTable):
     typeList = ["String", "Int", "Float", "Range", "Choice", "Time"]
@@ -810,10 +809,10 @@ def editField_setTypeArgs_range(field, fieldTable):
 def editField_setTypeArgs_time(field, fieldTable):
     typeList = field.typeArgs
     if typeList:
-        time = typeList[0] 
+        time = typeList[0]
     else:
         time = None
-    possibles = ["Minute","Hour","Day","Month","Year"]
+    possibles = ["Second","Minute","Hour","Day","Month","Year"]
     while True:
         UI = editField_drawAndUI_optionList("Setting time precision for field '%s'" % (field.key(),),
                     "Choose from the following options for time precision:",
@@ -855,7 +854,7 @@ def editField_setHidden(field,fieldTable):
         elif UI == None:
             break
     return 0
-        
+
 
 def editField_setOptional(field,fieldTable):
     titleStr = "Setting optional for field '%s'" % (field.key(),)
@@ -885,7 +884,7 @@ def editField_setDefault(field,fieldTable):
         "Time"  : editField_setDefault_time}
 
     return datatypeDict[datatype](field,fieldTable)
-    
+
 
 def editField_setDefault_easy(field,fieldTable):
     default = field.default
@@ -915,15 +914,38 @@ def editField_setDefault_choice(field,fieldTable):
         if main.validFieldEntry(default,field.datatype,field.typeArgs):
             field.default = default
 
-    
+
     else:
         editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." %(field.key(),),
                              "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
                              fieldTable)
-    
-def editField_setDefault_time(field,fieldTable):
-    pass
 
+def editField_setDefault_time(field,fieldTable):
+    accuracy = field.typeArgs[0]
+    (formats, examples) = main.time_strings(accuracy)
+    example_string = ', or '.join(examples)
+    titleStr = "Setting default time for field '%s'" % (field.key(),)
+    problem = None
+    # NDL 2013-09-12 extra points for bothering about singular case (ie only one form)...
+    instStr = "To set the detault time to the nearest %s, enter a string in one of the following forms: %s. " % (accuracy.lower(), example_string,) + \
+              "Alternatively press enter leaving the input blank to leave the default as it was."
+    while True:
+        if problem:
+            instStr_with_problem = problem + '\n' + instStr
+        else:
+            instStr_with_problem = instStr
+        UI = editField_drawAndUI(titleStr, instStr_with_problem, fieldTable)
+        if isinstance(UI, str):
+            default = main.parse_time(UI, formats)
+            if isinstance(default, str):
+                # oops, try again?
+                problem = '%s to nearest %s' % (default, accuracy.lower())
+            else:
+                field.default = default
+                return
+        elif UI == None:
+            break
+    return 0
 
 def editField_setHelp(field,fieldTable):
     helpStr = field.help
@@ -997,12 +1019,12 @@ def askConfirmString(key, titleInsert = None):
 
         "NameNewChildChoice":[["Name new sub-choice of %s","","Type the name of the new choice, then press enter.","$"],
                       ["Confirm sub-choice name","Confirm that you want the new choice to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to rename the choice, enter 'Quit' or 'Q'.","$"]],
-       
+
         "RenameChoice":[["Rename the choice %s","","Type the new name of the choice, then press enter.","$"],
                       ["Confirm rename name","Confirm that you want the choice to be named '%s'.","Enter 'Yes' or 'Y' to confirm, or 'No' or 'N' to enter something different. Alternatively, if you don't want to rename the choice, enter 'Quit' or 'Q'.","$"]],
         }
 
-    
+
     askInfo, confirmInfo = questionDict[key]
 
     if titleInsert:
@@ -1010,7 +1032,7 @@ def askConfirmString(key, titleInsert = None):
             askInfo[0] = askInfo[0] % (titleInsert,)
         if "%s" in confirmInfo[0]:
             confirmInfo[0] = confirmInfo[0] % (titleInsert,)
-                
+
 
     progress = "ask"
 
@@ -1071,7 +1093,7 @@ Adding to log _________ - selecting choice for field __________ - ~/a/b
         choice = main.Choice([])
 
 
-    possibleOptions = [ 
+    possibleOptions = [
         "Back",
         "Add a choice to this list",
         "Add a sub-choice to one of the choices on this list",
@@ -1103,12 +1125,12 @@ do thing
         print "!"
         print choice.choiceList
         print "!"
-        
+
         if choice.choiceList == []:
             # Deal with empty choice list.
 
             # Set avaialble options, build graphics, and ask for UI
-            
+
             currentOptions[1] = True
 
             for i in range(len(possibleOptions)):
@@ -1134,9 +1156,9 @@ do thing
                         choice.updateCurrentList()
                 if UI == 2 and not pickChoice:
                     break
-                
+
         elif not isinstance(choice.currentChoiceList,list):
-        
+
 
             # Set avaialble options, build graphics, and ask for UI
             currentOptions[0] = True
@@ -1146,7 +1168,7 @@ do thing
                 if currentOptions[i]:
                     listOfOptions.append(possibleOptions[i])
 
-            
+
             if pickChoice:
                 instStr = "Press enter to confirm your selection of %s, or select from one of the options above." % (str(choice.currentChoiceList),)
                 titleStr = titlePreStr + choice.filePath() + " - confirm selection"
@@ -1155,11 +1177,11 @@ do thing
                 instStr = "Select from the options above."
                 titleStr = titlePreStr + choice.filePath()
 
-            
+
             n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
             if n != 0:
                 main.complain("huh")
-            
+
             #Respond to UI
             if UI == None and pickChoice:
                 print "Have picked %s" % (str(choice.currentChoiceList),)
@@ -1174,7 +1196,7 @@ do thing
                         choice.keyList.pop()
                         choice.updateCurrentList()
                         choice.currentChoiceList[key][1] = [[newName, newName]]
-                        choice.pickChoice(key+1)                        
+                        choice.pickChoice(key+1)
                 elif UI == 3:
                     newName = askConfirmString("RenameChoice", choice.currentChoiceList)
                     if newName:
@@ -1190,7 +1212,7 @@ do thing
                         if isinstance(UI,str):
                             key = choice.keyList[-1]
                             choice.keyList.pop()
-                            choice.updateCurrentList()                            
+                            choice.updateCurrentList()
                             if UI.lower() in ["y","yes"]:
                                 if len(choice.currentChoiceList) > 1:
                                     choice.currentChoiceList.pop(key)
@@ -1200,7 +1222,7 @@ do thing
                                     choice.updateCurrentList()
                                     choice.currentChoiceList[key][1] = choice.currentChoiceList[key][0]
                                     choice.pickChoice(key+1)
-                                    
+
                                 else:
                                     choice.choiceList = []
                                 break
@@ -1224,8 +1246,8 @@ do thing
             titleStr = titlePreStr + choice.filePath()
             instStr = "Select from the options above."
 
-            n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
-            
+            n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+
             #Respond to UI
             if isinstance(UI, int):
                 if UI > 0 and UI < n + 1 + shift:
@@ -1240,8 +1262,8 @@ do thing
                         instStr = "Select a choice to add a sub-choice to."
                         listOfOptions = ["Do not add a sub-choice",]
 
-                        n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
-                        
+                        n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+
                         if isinstance(UI, int):
                             if UI > 0 and UI < n + 1:
                                 key = UI
@@ -1257,8 +1279,8 @@ do thing
                         instStr = "Select a choice to rename."
                         listOfOptions = ["Do not rename a choice.",]
 
-                        n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)           
-                        
+                        n, UI = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
+
                         if isinstance(UI, int):
                             if UI > 0 and UI < n + 1:
                                 key = UI
@@ -1270,7 +1292,7 @@ do thing
                                         choice.currentChoiceList[UI-1] = [newName, newName]
                                 break
                             elif UI == n + 1:
-                                break                   
+                                break
                 elif UI == n + 4 + shift:
                     while True:
                         titleStr = titlePreStr + choice.filePath() + " - deleting choice"
@@ -1278,7 +1300,7 @@ do thing
                         listOfOptions = ["Do not delete a choice.",]
 
                         n, key = choiceListEditor_drawAndUI(titleStr, choice, listOfOptions, instStr)
-                        
+
                         if isinstance(key, int):
                             if key > 0 and key < n + 1:
                                 while True:
@@ -1294,7 +1316,7 @@ do thing
                                                 choice.updateCurrentList()
                                                 choice.currentChoiceList[key][1] = choice.currentChoiceList[key][0]
                                                 choice.pickChoice(key+1)
-                                                
+
                                             else:
                                                 choice.choiceList = []
                                             break
@@ -1304,16 +1326,16 @@ do thing
                             elif key == n + 1:
                                 break
                 elif UI == n + 5 + shift:
-                    
+
                     break
-     
+
 
 
 def choiceListEditor_drawAndUI(titleStr, choice, otherOptions, instStr):
     title = graphics.splitToWidth(titleStr)
 
     listOfOptions = []
-    
+
     if choice.choiceList == []:
         n = 0
     elif isinstance(choice.currentChoiceList,list):
@@ -1342,9 +1364,9 @@ def choiceListEditor_drawAndUI(titleStr, choice, otherOptions, instStr):
 
 
 
-    
-    
-"""        
+
+
+"""
 def editField_drawAndUI(title, text, fieldTable):
     splitText = graphics.splitToWidth(text)
     maxLenFieldTable = graphics.WINDOW_HEIGHT - len(splitText) - 5
