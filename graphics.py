@@ -575,8 +575,7 @@ key,datatype,hidden,optional,help
 
 def drawRecentData(leaf, priorityCol = None,unfinishedEntry = None, maxHeight = WINDOW_HEIGHT, maxWidth= WINDOW_WIDTH, drawHidden = False, drawDeleted = False):
 
-
-#Get field list
+    # Get field list
 
     data = leaf.entries()
     if isinstance(unfinishedEntry,dict):
@@ -591,8 +590,6 @@ def drawRecentData(leaf, priorityCol = None,unfinishedEntry = None, maxHeight = 
         if drawHidden or (field.hidden == False):
             fieldList.append(field.key())
 
-
-
     if drawDeleted:
         deletedFieldSet = set([])
         for entry in data:
@@ -604,8 +601,7 @@ def drawRecentData(leaf, priorityCol = None,unfinishedEntry = None, maxHeight = 
             if field not in fieldList:
                 fieldList.append(field)
 
-
-#Get data into the lists
+    # Get data into the lists
     rows = []
     rows.append(fieldList)
     for entry in data:
@@ -623,7 +619,8 @@ def drawRecentData(leaf, priorityCol = None,unfinishedEntry = None, maxHeight = 
         priorityDict = {}
         priorityCol = 0
 
-
+    if isinstance(unfinishedEntry,dict):
+        data.remove(unfinishedEntry)          # otherwise it just keeps growing
     return drawTableFromListOfLists(rows, "Full", 10,priorityDict,maxWidth,priorityCol,maxHeight,"Top",False)
 
 

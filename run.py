@@ -1,3 +1,5 @@
+
+
 """
 Things that need doing before alpha:
 
@@ -115,7 +117,7 @@ import json
 
 import time
 
-FOLLOW_PRESETS = True
+FOLLOW_PRESETS = False
 RECORD_INPUTS = True
 USER_INPUT_PRESETS =['2', '2', '2', '1', '1', '1', '2', '6', '3', '1', '5', 't']
 USER_INPUT_RECORDING = []
@@ -205,9 +207,20 @@ def userInput():
     return userIn
 
 
+def yesOrNo(query):
+    while True:
+        graphics.askYesNo(query)
+        UI = userInput()
+        if isinstance(UI, str):
+            if match(UI, "yes"):
+                return True
+            elif match(UI,"no"):
+                return False
 
-
-
+def match(substring, string):
+    substring=substring.lower()
+    string=string.lower()
+    return len(substring)>0 and string.find(substring)==0
 
 
 def mainMenu(state):
@@ -231,9 +244,7 @@ def mainMenu(state):
             state.menu.pickChoice(UI)
 
 
-def addEntry(state):
-
-# Pick Leaf
+def selectAddEntryLeaf(state):
     while not isinstance(state.currentL, main.Leaf):
         if state.currentL == None:
             state.currentL = state.logs
@@ -248,97 +259,221 @@ def addEntry(state):
                 if state.currentL == None:
                     # We went up so many levels we have to stop now.
                     state.currentL = state.logs
-                    return 0
-# Add entry
+                    return False
+    return True
 
 
-    for i in range(len(state.currentL.fields())):
-        graphics.drawRecentData(state.currentL,i,drawHidden = True, drawDeleted = True)
-        print "!!!"
-        print "!"
-        print "!!!"
-
-    log = state.currentL
-    fields = log.fields()
-
-    fieldsTable = graphics.TableOfFields(log, graphics.WINDOW_WIDTH)
-
-
-    cont = "Start"
-    count = 0
+def addEntry(state, log=None):
     partialEntry = {}
 
+    if not log:
+        # Pick a leaf onto which an entry can be added
+        if not selectAddEntryLeaf(state):
+            return 0
+        log = state.currentL
+    fields = log.fields()
+    fieldsTable = graphics.TableOfFields(log, graphics.WINDOW_WIDTH)
+
+    titleStr = "Adding entries to %s" % (log.key(),)
+    title = [graphics.cutTo(titleStr)]
+
+    instStr = "To start adding an entry, press enter leaving the input blank. " + \
+              "Alternatively enter 'Done' to stop adding entries or 'Quit' to save and quit the Logger."
+    inst = graphics.splitToWidth(instStr)
+
+    spare = graphics.WINDOW_HEIGHT - 6 - len(inst)
+    maxLenFieldsTable = min(spare * 2 / 3, len(fieldsTable))
+    maxLenDataTable = spare - maxLenFieldsTable
+
+    dataTable = graphics.drawRecentData(leaf=log, maxHeight=maxLenDataTable, unfinishedEntry=partialEntry)
+    content = fieldsTable[:maxLenFieldsTable] + [graphics.WINDOW_WIDTH * "-",] + dataTable
+
+    UI = False
+    while UI is not None:
+        graphics.drawWindow(title, content, inst, ["$ ",])
+        UI = userInput()
+        if isinstance(UI, str):
+            if match(UI,"done"):
+                return 0
+            elif match(UI,"quit"):
+                return quitProgram(state)
+
+    # Permission to proceed! Enter main loop: selecting a field to set and then setting it.
+    index = 0
+    field = fields[index]
+
+    titleStr = "Adding new entry to %s" % (log.key(),)
+    title = [graphics.cutTo(titleStr)]
 
     while True:
-        if cont == "Start":
-            titleStr = "Adding entries to %s" % (log.key(),)
-            instStr = "To start adding an entry, press enter leaving the input blank. Alternatively enter 'Done' to stop adding entries or 'Quit' to save and quit the Logger."
-            title = [graphics.cutTo(titleStr),]
-            inst = graphics.splitToWidth(instStr)
-            spare = graphics.WINDOW_HEIGHT - 6 - len(inst)
-            maxLenFieldsTable = min(spare * 2 / 3, len(fieldsTable))
-            maxLenDataTable = spare - maxLenFieldsTable
+        # What are we allowed to do here?
+        navOptions = navigateOptions(fields, index, partialEntry)
+        mayGoBack, selectLimit, mayComplete = navOptions
 
-            dataTable = graphics.drawRecentData(leaf = log,maxHeight = maxLenDataTable)
-            graphics.drawWindow(title,fieldsTable[:maxLenFieldsTable] + [graphics.WINDOW_WIDTH * "-",] + dataTable,inst,["$ ",])
-            UI = userInput()
+        inst =  addEntryInstrs(index, fields, mayGoBack, selectLimit, mayComplete)
 
-            if UI == None:
-                cont = ["Enter",0]
-            elif isinstance(UI, str):
-                if UI.lower() in ["d","done"]:
-                    return 0
-                elif UI.lower() in ["q","quit"]:
-                    return quitProgram(state)
-        elif isinstance(cont,list):
-            if cont[0] == "Enter":
-                datatype = fields[cont[1]]
-                fieldTable = graphics.drawField(fields[cont[1]])
+        spare = graphics.WINDOW_HEIGHT - 6 - len(inst)
+        maxLenFieldsTable = min(spare * 2 / 3, len(fieldsTable))
+        maxLenDataTable = spare - maxLenFieldsTable
 
-                datatypeDict = {
-                    "String": enterData_easy,
-                    "Int"   : enterData_easy,
-                    "Float" : enterData_easy,
-                    "Range" : enterData_easy,
-                    "Choice": enterData_choice,
-                    "Time"  : enterData_time}
-                value = datatypeDict[datatype](fields[cont[1]],fieldTable)
-                if value == None:
-                    main.complain("Now how did that happen?")
-                partialEntry[field.key()] = value
-                cont[0] = "confirm"
+        dataTable = graphics.drawRecentData(leaf=log, maxHeight=maxLenDataTable, priorityCol=index, unfinishedEntry=partialEntry)
+        offset = max(index-maxLenDataTable, 0)
+        content = fieldsTable[offset:maxLenFieldsTable+offset] + [graphics.WINDOW_WIDTH * "-",] + dataTable
 
-
+        command = parseAddEntryCommand(index, partialEntry, navOptions, title, content, inst)
+        if isinstance(command, str):
+            if match(command, "cancel"):
+                return
+            elif match(command, "done"):
+                log.entry(partialEntry)
+                # Add another one, probably
+                return addEntry(state, log)
+            else:
+                complain("Unexpected: %s" % (command,))
+        else:
+            index, partialEntry = command
+            field = fields[index]
+            if main.validDatatype(field.datatype, field.typeArgs):
+                partialEntry = augmentPartialEntry(partialEntry, field, index, log)
+                index = index + 1
+                if index >= len(fields):
+                    index = 0
+            else:
+                # NDL 2013-10-11 -- I can't help asking how this could happen. Didn't we check this stuff already?
+                editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." % (field.key(),),
+                                    "!!! Either the datatype or the associated type args are not valid. You cannot set a default until this has been fixed.",
+                                    graphics.drawField(field))
 
 
+def navigateOptions (fields, index, partialEntry):
+    # mayGoBack enables Back and Restart
+    mayGoBack = (index >= 1)
+    # How far may we navigate? The rule is: if field[N] is either set
+    # or optional, we can go at least to N+1.
+    i = 0
+    max = len(fields)
+    while i < max:
+        field = fields[i]
+        if field.optional or field.key() in partialEntry:
+            i = i + 1
+        else:
+            break
+    # selectLimit is maximum index to which we may navigate; if we
+    # can't go anywhere it's zero.
+    selectLimit = min (i, max-1)
+    # mayComplete is True if every field is either set or optional.
+    mayComplete = (i == max)
+    #
+    return (mayGoBack, selectLimit, mayComplete)
 
 
+def addEntryInstrs(index, fields, mayGoBack, selectLimit, mayComplete):
+    thisField = fields[index]
+    thisInstr = "To set '%s' for this entry, press enter leaving the input blank." % (thisField.key(),)
 
-def enterData_easy(field,fieldTable):
-    default = field.default
-    if main.validDatatype(field.datatype,field.typeArgs):
-        while True:
-            titleStr = "Entering value for field '%s'." %(field.key(),)
-            helpStr = field.helps
-            instStr = "Enter value for field '%s', invalid values will be ignored." %(field.key(),)
-            if optional:
-                instStr = instStr + " Alternatively, press enter leaving the input blank to use the default value."
-
-
-
-
-            if main.validFieldEntry(UI, field.datatype,field.typeArgs):
-                default = UI
-                break
-            elif UI == None:
-                break
-
-        if main.validFieldEntry(default, field.datatype,field.typeArgs):
-            field.default = default
+    backInstr = ["'Back' to reset '%s'" % (fields[index-1].key(),)] if mayGoBack else []
+    selectInstr = ["'Select' followed by a number below %d to reset a specific field" % (selectLimit+1,)] if selectLimit>0 else []
+    restartInstr = ["'Restart' to start again"] if mayGoBack else []
+    cancelInstr = ["'Cancel' to give up"]
+    doneInstr = ["'Done' to save this entry"] if mayComplete else []
+    optionalInstrs = backInstr + selectInstr + restartInstr + cancelInstr + doneInstr
+    instrCount = len(optionalInstrs)
+    if instrCount>1:
+        optionalInstrs[instrCount-1] = "or " + optionalInstrs[instrCount-1]
+        optionalInstrs = ", ".join(optionalInstrs)
     else:
-        editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." %(field.key(),),
-                             "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
-                             fieldTable)
+        optionalInstrs = optionalInstrs[0]
+    return graphics.splitToWidth(thisInstr + " Alternatively enter " + optionalInstrs + ".")
+
+def parseAddEntryCommand(index, partialEntry, navOptions, title, content, inst):
+    mayGoBack, selectLimit, mayComplete = navOptions
+    while True:
+        graphics.drawWindow(title, content, inst, ["$ ",])
+        UI = userInput()
+        if UI is None:
+            break
+        elif isinstance(UI, str):
+            if mayGoBack and match(UI, "back"):
+                index = index - 1
+                break
+            elif mayGoBack and match(UI, "restart"):
+                if yesOrNo("Confirm: would you like to start this entry again?"):
+                    partialEntry = {}
+                    index = 0
+                    break
+            elif match(UI, "cancel"):
+                if yesOrNo("Confirm: would you like to abandon this new entry?"):
+                    return "cancel"
+            elif mayComplete and match(UI, "done"):
+                return "done"
+            elif selectLimit>0:
+                splut = UI.split()
+                if len(splut) == 2 and match(splut[0], "select"):
+                    try:
+                        where = int(splut[1])
+                        if where <= selectLimit:
+                            index = where
+                            break
+                    except:
+                        pass
+    return (index, partialEntry)
+
+
+def augmentPartialEntry(partialEntry, field, index, log):
+    "Returns (augmented) partialEntry"
+    default = field.default
+    while True:
+        key = field.key()
+        titleStr = "Entering value for field '%s'." % (key,)
+        helpStr = field.help
+        datatype = field.datatype
+        typeArgs = field.typeArgs
+
+        if datatype in ("String", "Float"):
+            typeString = datatype.lower()
+        elif datatype == "Int":
+            typeString = "integer"
+        elif datatype == "Range":
+            typeString = "integer from %d to %d" % (typeArgs[0],  typeArgs[1])
+        elif datatype == "Time":
+            accuracy = field.typeArgs[0]
+            (formats, examples) = main.time_strings(accuracy)
+            example_string = ', or '.join(examples)
+            typeString = "date/time to the nearest %s, such as %s, or the string 'now'" % (accuracy.lower(), example_string,)
+        elif datatype == "Choice":
+            typeString = "integer correpsonding to your choice"
+        else:
+            complain ("Type was %s?" % (datatype,))
+
+        instStr = "Enter value - %s - for field '%s'; invalid values will be ignored." % (typeString, key)
+        if key in partialEntry:
+            instStr = instStr + " Alternatively, press enter leaving the input blank to reuse the current value."
+        elif field.optional:
+            instStr = instStr + " Alternatively, press enter leaving the input blank to use the default value."
+        instStr = instStr + " " + helpStr
+
+        title = [graphics.cutTo(titleStr),]
+        inst = graphics.splitToWidth(instStr)
+        spare = graphics.WINDOW_HEIGHT - 6 - len(inst)
+        maxLenFieldsTable = spare * 2 / 3
+        maxLenDataTable = spare - maxLenFieldsTable
+
+        fieldsTable = graphics.TableOfFields(log, graphics.WINDOW_WIDTH)
+        dataTable = graphics.drawRecentData(leaf=log ,maxHeight=maxLenDataTable, priorityCol=index, unfinishedEntry=partialEntry)
+        graphics.drawWindow(title, fieldsTable[:maxLenFieldsTable] + [graphics.WINDOW_WIDTH * "-"] + dataTable, inst, ["$ "])
+        UI = userInput()
+
+        if datatype == "Time":
+            if isinstance(UI, str) and UI.lower() == "now":
+                value = main.now()
+            else:
+                value = main.parse_time(UI, formats)
+        else:
+            value = UI
+        if (value is None and field.optional) or main.validFieldEntry(value, datatype, typeArgs):
+            partialEntry[field.key()] = value
+            return partialEntry
+
 
 def enterData_choice(field):
     default = field.default
@@ -353,11 +488,6 @@ def enterData_choice(field):
         editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." %(field.key(),),
                              "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
                              fieldTable)
-
-def enterData_time(field):
-    pass
-
-
 
 
 ## views fields,entries, "" to cont
@@ -420,12 +550,12 @@ def addNewLog(state):
 
 
         elif isinstance(UI, str):
-            if UI.lower() in ["branch","b"]:
+            if match(UI, "branch"):
                 newLogName = askConfirmString("NameNewLogBranch")
                 if newLogName != None:
                     state.currentL.branch(newLogName)
                 graphics.drawPickLog("AddNewLog",state)
-            elif UI.lower() in ["leaf","l"]:
+            elif match(UI, "leaf"):
                 newLogName = askConfirmString("NameNewLogLeaf")
                 if newLogName != None:
                     state.currentL.leaf(newLogName)
@@ -488,9 +618,9 @@ def editLog(state):
                         fieldToEdit = state.currentL.fields()[UI]
                         editField(fieldToEdit, state.currentL)
                 elif isinstance(UI, str):
-                    if UI.lower() in ["b", "back"]:
+                    if match(UI, "back"):
                         return 0
-                    elif UI.lower() in ["n", "new"]:
+                    elif match(UI, "new"):
                         # Edit new (empty) field.
                         editField(None, state.currentL)
 
@@ -520,15 +650,9 @@ def editField(oldField, leaf):
 
                     return slotToEdit
                 else:
-                    while True:
-                        graphics.askYesNo("The field %s cannot be saved in its current state, would you still "
-                                          "like to quit (and lose any changes you've made)?" % (newField.key(),))
-                        UI = userInput()
-                        if isinstance(UI, str):
-                            if UI.lower() in ["y","yes"]:
-                                return slotToEdit
-                            if UI.lower() in ["n","no"]:
-                                break
+                    if yesOrNo("The field %s cannot be saved in its current state, would you still "
+                               "like to quit (and lose any changes you've made)?" % (newField.key(),)):
+                        return slotToEdit
             else:
                 return slotToEdit
 
@@ -697,7 +821,6 @@ def editField_setKey(field, fieldTable):
                 # This should leave key as it was, as per instructions given above.
                 break
     if key:
-        print "KEY:   ", key
         field._key = key
 
 def editField_setDatatype(field, fieldTable):
@@ -845,10 +968,10 @@ def editField_setHidden(field,fieldTable):
     while True:
         UI =  editField_drawAndUI(titleStr, instStr, fieldTable)
         if isinstance(UI, str):
-            if UI.lower() in ['t','true']:
+            if match(UI, 'true'):
                 field.hidden = True
                 break
-            elif UI.lower() in ['f','false']:
+            elif match(UI, 'false'):
                 field.hidden = False
                 break
         elif UI == None:
@@ -862,10 +985,10 @@ def editField_setOptional(field,fieldTable):
     while True:
         UI =  editField_drawAndUI(titleStr, instStr, fieldTable)
         if isinstance(UI, str):
-            if UI.lower() in ['t','true']:
+            if match(UI, 'true'):
                 field.optional = True
                 break
-            elif UI.lower() in ['f','false']:
+            elif match(UI, 'false'):
                 field.optional = False
                 break
         elif UI == None:
@@ -920,7 +1043,7 @@ def editField_setDefault_choice(field,fieldTable):
                              "!!! Either the datatype or the associated type args are not valid, you cannot set a default until this has been fixed.",
                              fieldTable)
 
-def editField_setDefault_time(field,fieldTable):
+def editField_setDefault_time(field, fieldTable):
     accuracy = field.typeArgs[0]
     (formats, examples) = main.time_strings(accuracy)
     example_string = ', or '.join(examples)
@@ -971,15 +1094,7 @@ def editField_setHelp(field,fieldTable):
 
 
 def editField_confirmLeaveBlank(what):
-    while True:
-        graphics.askYesNo("Do you wish to leave the %s blank? If you do so you won't be able to save the field." % (what,))
-        UI = userInput()
-        if isinstance(UI, str):
-            if UI.lower() in ["y","yes"]:
-                return True
-            if UI.lower() in ["n","no"]:
-                return False
-
+    return yesOrNo("Do you wish to leave the %s blank? If you do so you won't be able to save the field." % (what,))
 
 
 def viewData(state):
@@ -988,22 +1103,15 @@ def viewData(state):
     return 0
 
 def quitProgram(state):
-    while True:
-        graphics.askYesNo("Are you sure you want to quit?")
-        UI = userInput()
-        if isinstance(UI,str):
-            if UI.lower() in ["y","yes"]:
-                break
-            if UI.lower() in ["n","no"]:
-                return 0
-        if UI == 1:
-            break
-    state.logs.write("Logs.xml")
-    nowStr = str(main.now().previous(days = 0))
-    backUpStr = "backup/Logs_" + nowStr[:10]
-    print backUpStr
-    state.logs.write(backUpStr)
-    return -1
+    if yesOrNo("Are you sure you want to quit?"):
+        state.logs.write("Logs.xml")
+        nowStr = str(main.now().previous(days = 0))
+        backUpStr = "backup/Logs_" + nowStr[:10]
+        print backUpStr
+        state.logs.write(backUpStr)
+        return -1
+    else:
+        return 0
 
 
 def askConfirmString(key, titleInsert = None):
@@ -1050,11 +1158,11 @@ def askConfirmString(key, titleInsert = None):
             graphics.splitAndDraw(title,content,instruction,prompt)
             UI = userInput()
             if isinstance(UI, str):
-                if UI.lower() in ["y","yes"]:
+                if match(UI, "yes"):
                     return ans
-                if UI.lower() in ["q","quit"]:
+                elif match(UI, "quit"):
                     return None
-                if UI.lower() in ["n","no"]:
+                elif match(UI, "no"):
                     progress = "ask"
 
 
@@ -1457,3 +1565,4 @@ while True:
 
 
 """
+

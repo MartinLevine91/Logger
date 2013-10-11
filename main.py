@@ -588,7 +588,7 @@ def validFieldEntry(entry, datatype,typeArgs):
             return validString(entry)
         elif datatype == "Range":
             if isinstance(entry, int) or isinstance(entry, float):
-                if entry > typeArgs[0] and entry < typeArgs[1]:
+                if entry >= typeArgs[0] and entry <= typeArgs[1]:
                     return True
                 else:
                     return False
