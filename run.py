@@ -422,35 +422,44 @@ def parseAddEntryCommand(index, partialEntry, navOptions, title, content, inst):
 def augmentPartialEntry(partialEntry, field, index, log):
     "Returns (augmented) partialEntry"
     default = field.default
+    key = field.key()
+    titleStr = "Entering value for field '%s'." % (key,)
+    helpStr = field.help
+    datatype = field.datatype
+    typeArgs = field.typeArgs
+    choicePath = []
+    choiceOptions = typeArgs
+
+    if datatype in ("String", "Float"):
+        typeString = datatype.lower()
+    elif datatype == "Int":
+        typeString = "integer"
+    elif datatype == "Range":
+        typeString = "integer from %d to %d" % (typeArgs[0],  typeArgs[1])
+    elif datatype == "Time":
+        accuracy = field.typeArgs[0]
+        (formats, examples) = main.time_strings(accuracy)
+        example_string = ', or '.join(examples)
+        typeString = "date/time to the nearest %s, such as %s, or the string 'now'" % (accuracy.lower(), example_string,)
+    elif datatype == "Choice":
+        typeString = "integer correpsonding to your choice"
+    else:
+        complain ("Type was %s?" % (datatype,))
+
     while True:
-        key = field.key()
-        titleStr = "Entering value for field '%s'." % (key,)
-        helpStr = field.help
-        datatype = field.datatype
-        typeArgs = field.typeArgs
-
-        if datatype in ("String", "Float"):
-            typeString = datatype.lower()
-        elif datatype == "Int":
-            typeString = "integer"
-        elif datatype == "Range":
-            typeString = "integer from %d to %d" % (typeArgs[0],  typeArgs[1])
-        elif datatype == "Time":
-            accuracy = field.typeArgs[0]
-            (formats, examples) = main.time_strings(accuracy)
-            example_string = ', or '.join(examples)
-            typeString = "date/time to the nearest %s, such as %s, or the string 'now'" % (accuracy.lower(), example_string,)
-        elif datatype == "Choice":
-            typeString = "integer correpsonding to your choice"
-        else:
-            complain ("Type was %s?" % (datatype,))
-
         instStr = "Enter value - %s - for field '%s'; invalid values will be ignored." % (typeString, key)
         if key in partialEntry:
             instStr = instStr + " Alternatively, press enter leaving the input blank to reuse the current value."
         elif field.optional:
             instStr = instStr + " Alternatively, press enter leaving the input blank to use the default value."
-        instStr = instStr + " " + helpStr
+
+        if datatype == "Choice":
+            optionStrs = []
+            for i in range(len(choiceOptions)):
+                optionStrs += ["%d. %s" % (i+1, choiceOptions[i][0])]
+            instStr = instStr + " " + ", ".join(optionStrs) + ". " + helpStr
+        else:
+            instStr = instStr + " " + helpStr
 
         title = [graphics.cutTo(titleStr),]
         inst = graphics.splitToWidth(instStr)
@@ -468,8 +477,22 @@ def augmentPartialEntry(partialEntry, field, index, log):
                 value = main.now()
             else:
                 value = main.parse_time(UI, formats)
+        elif datatype == "Choice":
+            try:
+                which =int(UI) -1
+            except:
+                pass
+            value = None
+            if which in range(len(choiceOptions)):
+                choicePath += [str(choiceOptions[which][0])]
+                what = choiceOptions[which][1]
+                if isinstance(what, str) or isinstance(what, unicode):
+                    value = "~/" + "/".join(choicePath)
+                elif not UI is None:
+                    choiceOptions = what
         else:
             value = UI
+        print "value", value
         if (value is None and field.optional) or main.validFieldEntry(value, datatype, typeArgs):
             partialEntry[field.key()] = value
             return partialEntry
