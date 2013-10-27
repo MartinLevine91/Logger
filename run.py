@@ -306,6 +306,10 @@ def addEntry(state, log=None):
     title = [graphics.cutTo(titleStr)]
 
     while True:
+        
+        
+
+        
         # What are we allowed to do here?
         navOptions = navigateOptions(fields, index, partialEntry)
         mayGoBack, selectLimit, mayComplete = navOptions
@@ -340,10 +344,19 @@ def addEntry(state, log=None):
                     index = 0
             else:
                 # NDL 2013-10-11 -- I can't help asking how this could happen. Didn't we check this stuff already?
+                # MGL 2013-10-26 -- Early stages, I don't massively trust any data-checking we've done so far. 
                 editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." % (field.key(),),
                                     "!!! Either the datatype or the associated type args are not valid. You cannot set a default until this has been fixed.",
                                     graphics.drawField(field))
 
+
+def addEntry_goToOptions(index, fields, title):
+    fieldKey = fields[index].key()
+
+    content =  graphics.splitToWidth("To set '%s' for this entry, press enter leaving the input blank. To see alternate options enter 'Option'."
+
+    
+    
 
 def navigateOptions (fields, index, partialEntry):
     # mayGoBack enables Back and Restart
@@ -351,7 +364,7 @@ def navigateOptions (fields, index, partialEntry):
     # How far may we navigate? The rule is: if field[N] is either set
     # or optional, we can go at least to N+1.
     i = 0
-    max = len(fields)
+    max = len(fields)s
     while i < max:
         field = fields[i]
         if field.optional or field.key() in partialEntry:
