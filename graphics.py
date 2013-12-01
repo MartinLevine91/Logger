@@ -284,7 +284,7 @@ Will break if there isn't room for K,T,O at default, D,H at min.
 
 
     fields = leaf.fields()
-    print "Fields", type(fields), fields
+    #print "Fields", type(fields), fields
 
     fullWidthTable = []
 
@@ -296,9 +296,9 @@ Will break if there isn't room for K,T,O at default, D,H at min.
         else:
             hidden = " "
 
-        print "field: ", field
+        #print "field: ", field
         key = field.key()
-        print "key: ", key
+        #print "key: ", key
 
         dataType = field.datatype
         typeArgs = field.typeArgs
@@ -312,9 +312,9 @@ Will break if there isn't room for K,T,O at default, D,H at min.
                     dataType = "Rng " + rng
 
             elif dataType == "Time":
-                print "TIME"
-                print typeArgs
-                print "TIME"
+                #print "TIME"
+                #print typeArgs
+                #print "TIME"
                 dataType = "Time " + {"Minute":"Min", "Hour":"Hour", "Day":"Day", "Month":"Mon", "Year":"Year"}[typeArgs[0]]
         except:
             dataType = "?" + dataType
@@ -477,7 +477,103 @@ elif >= M,M,D,D = M,M,D+,D+
     return fieldTable
 
 # NDL 2013-07-14 -- currently only one caller to drawField, and it hardwires field to None
-def drawField(field, fieldAsTable = None, maxWidth = WINDOW_WIDTH,maxHeight = 8):
+def miniDrawField(field,leaf, unfinishedEntry = None, whatType = "current",maxWidth = WINDOW_WIDTH):
+    include = {}
+    bits = {}
+
+    if whatType == "previous":
+        include["key"] = True
+        include["datatype"] = True
+        include["default"] = True
+        include["currentVal"] = True
+        include["prevVal"] = True
+        include["helpStr"] = False
+    elif whatType == "current":
+        include["key"] = True
+        include["datatype"] = True
+        include["default"] = True
+        include["currentVal"] = False
+        include["prevVal"] = True
+        include["helpStr"] = False
+    elif whatType == "next":
+        include["key"] = True
+        include["datatype"] = True
+        include["default"] = True
+        include["currentVal"] = False
+        include["prevVal"] = True
+        include["helpStr"] = True
+    else:
+        main.complain("bad minifieldtable type")
+
+
+    if include["key"]:
+        bits["key"] ="Key: " + field.key()
+    
+    if include["datatype"]:
+        datatype = field.datatype
+        typeArgs = field.typeArgs
+        try:
+            if datatype == "Range":
+                rng = str(typeArgs[0]) + "-" + str(typeArgs[1])
+            elif datatype == "Time":
+                datatype = "Time " + {"Minute":"Min", "Hour":"Hour", "Day":"Day", "Month":"Mon", "Year":"Year"}[typeArgs[0]]
+        except:
+            datatype = "?" + datatype
+        bits["datatype"] = "Type: " + datatype
+    if include["default"]:
+        if(field.default):
+            bits["default"] = "Default: " + field.default
+        else:
+            bits["default"] = "No default."
+        
+    if include["currentVal"]:
+        try:
+            bits["currentVal"] = "Current value: " + str( unfinishedEntry[field.key()])
+        except:
+            bits["currentVal"] = "Could not find current value"
+    if include["prevVal"]:
+        if field.key() in leaf.entries()[-1]:
+           bits["prevVal"] = "Previous value: " + str( leaf.entries()[-1][field.key()])
+        elif field.default:
+            bits["prevVal"] = "Previous value: " + str(field.default)
+        else:
+            bits["prevVal"] = "Could not find previous value"
+    if include["helpStr"]:
+        bits["helpStr"] = "Help: " + field.help
+
+    if whatType == "previous":
+        miniFieldTable = [
+            cutTo(bits["key"],3*(maxWidth/8)-2) + 2*" " + \
+            cutTo( bits["datatype"],2*(maxWidth/8)-2) + 2*" " +\
+            cutTo(bits["default"],maxWidth -5*(maxWidth/8)),
+            \
+            cutTo( bits["currentVal"],5*(maxWidth/8)-2) + 2*" " +\
+            cutTo(bits["prevVal"],maxWidth -5*(maxWidth/8))]
+    if whatType == "current":
+        miniFieldTable = [
+            cutTo(bits["key"],(maxWidth/2)-2) + 2*" " + \
+            cutTo( bits["datatype"],maxWidth - maxWidth/2),
+            \
+            cutTo( bits["prevVal"],(maxWidth/2)-2) + 2*" " +\
+            cutTo(bits["default"],maxWidth -maxWidth/2)]        
+    if whatType == "next":
+        miniFieldTable = [
+            cutTo(bits["key"],3*(maxWidth/8)-2) + 2*" " + \
+            cutTo( bits["datatype"],2*(maxWidth/8)-2) + 2*" " +\
+            cutTo(bits["default"],maxWidth -5*(maxWidth/8)),
+            \
+            cutTo( bits["helpStr"],5*(maxWidth/8)-2) + 2*" " +\
+            cutTo(bits["prevVal"],maxWidth -5*(maxWidth/8))]
+    return miniFieldTable
+    data = leaf.entries()
+
+logs = main.read("Logs.xml")
+leaf = logs.children()[0].children()[0]
+field = leaf.fields()[0]
+for line in miniDrawField(field, leaf,{"Gut pain": 3}, "next"):
+    print line
+
+def drawField(field,  fieldAsTable = None, maxWidth = WINDOW_WIDTH,maxHeight = 8):
     """
 Draws a field in 8 lines (or more)
 1   Key:
@@ -490,6 +586,10 @@ Draws a field in 8 lines (or more)
 8
 key,datatype,hidden,optional,help
     """
+
+    # Get field list
+    
+
     if field != None:
         key = field.key()
         datatype = field.datatype
