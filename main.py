@@ -570,7 +570,7 @@ def validField(field):
 def validString(string):
     if isinstance(string, str):
         for item in ["%", "/n","none"]:
-            if item.lower() in string:
+            if string.lower() == item:
                 return False
         return True
     else:
