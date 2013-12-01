@@ -1,127 +1,16 @@
 
 
-"""
-Things that need doing before alpha:
-
-
-edit_field:
-
-- default: not started
-Untested - when type is changed if there is a default value, that default value should be set to None. The same should happen if type-args change and make the default invalid.
-
-add_log_entry:
-- not started
-
-Need to talk to dad about "Time" class
-- between midnight and 1AM, (prob only during summer time) rounds back to previous day...
-
-
-save - need to have back-ups writes of most recent save of each day
-
-Things that need doing at some point:
-
-- Lists longer than one screen height need to be handled in some fashion.
-  Probably with navigation between sets of around ten.
-- Very long strings also need some kind of navigation to be viewed properly.
-- Print out two lines of "-" after every UI entered and before each new screen.
-  (To make it easier to seperate debug info from UI)
-
-
-
-This module:
-* Keeps track of program state
-* Interprets user inputs, sending some through main.py
-* Sends the state to graphicalOut.py to update the UI
-
-
-The state needs to know what menu-node is currently active, as well the user's
-location within the program.
-
-
-- read in current data
-- offer user options
-
-> Add new log entry
->> Choose between logs until hit leaf
->>> Enter data for new entry
-> Add/edit logs
->> Add log
->>> Flick through branches until decide where to add leaf
->>>> Fill in fieds for new log
->> Edit log
->>> Pick log to edit
->>>> Edit location of log in data structure
->>>> Edit fields for log
-> View log data
->> Pick log
-
-
-Menu options stored as nodes, their functions must all be able to run with only State as input.
-
-When an option is selected, if it is a leaf then something along the lines of:
-"runMenuOption(currentNode, state)"
-is run.
-
-* Build in menu navigation with a runMenuOption simply printing the selected leags' location.
-
-
-%%VIEW MODES%%
-!!
-_____________________________
-Title bar
-----------------------------
-!Content!
-
-
-
-
-
-!Content!
------------------------------
-Instruction bar
------------------------------
-User input bar
-
-_____________________________
-!!
-
-Examples:
-
-Title bar: "Menu selction: ~/'Add or edit log templates'/..."
-Content: List of options (add logs, edit logs, back)
-Instruction bar: "Select menu option from above."
-User input: "1"
-
-Title bar: "Adding entries to Health/'Toilet Visit'"
-Content: Table of previous entries.
-Instruction bar: "Rate consistency on a scale of 0 to 10, 'H' for help with this datum, 'B' to go back to previous datum or 'Q' to quit entry"
-User input: "4.5"
-
-Title bar: "Editting log template - Health/Sleep"
-Content: Table of datums, complete with defaults and ranges etc. Followed by list of options/instructions for next part of next datum
-Instruction bar: "Choose a data type from the list for 'Asleep by'"
-User input: "4"
-
-
-
-
-
-
-
-
-"""
-
 import main
 import graphics
 import json
 
 import time
 
-FOLLOW_PRESETS = False
+FOLLOW_PRESETS = True
 RECORD_INPUTS = True
-USER_INPUT_PRESETS =['2', '2', '2', '1', '1', '1', '2', '6', '3', '1', '5', 't']
+USER_INPUT_PRESETS =[1, 1, 1, None, 0, None, 0, None, 0, None, 0, None, 0]
 USER_INPUT_RECORDING = []
-DELAY_TIMER = 0.3
+DELAY_TIMER = 0.1
 
 
 
@@ -135,22 +24,7 @@ def selectNodeChild(current,userIn):
             current = listOfChildren[userIn-1]
         elif userIn == len(listOfChildren)+1:
             current = current.parent()
-
     return current
-
-
-
-
-def addLogTemplate(branch):
-#v0
-#-add field, give options for dataType
-# number, range, text, choice, timestamp
-
-
-    while True:
-        break
-    return None
-
 
 class LoggerState:
     def __init__(self,menu,logRoot):
@@ -191,7 +65,6 @@ def userInput():
                     userIn = None
                 if userIn == "":
                     userIn = None
-
             except:
                 userIn = None
     except:
@@ -200,7 +73,7 @@ def userInput():
         str_UI = str(userIn)
         if str_UI == "None":
             str_UI = ""
-        USER_INPUT_RECORDING.append(str(userIn))
+        USER_INPUT_RECORDING.append(userIn)
         print "Recorded input so far:", USER_INPUT_RECORDING
     if isinstance(userIn, str) and userIn.lower() == "kill program":
         main.complain("Got kill request")
@@ -217,6 +90,7 @@ def yesOrNo(query):
             elif match(UI,"no"):
                 return False
 
+
 def match(substring, string):
     substring=substring.lower()
     string=string.lower()
@@ -224,25 +98,25 @@ def match(substring, string):
 
 
 def mainMenu(state):
-
     done = False
-
     while True:
         if hasattr(state.menu.currentChoiceList, '__call__'):
             #If have selected a function: reset the log tree, run the function, then return to the parent menu.
             state.currentL = state.logs
-            if state.menu.currentChoiceList(state) == -1:
+            output = state.menu.currentChoiceList(state)
+            if output == -1:
+                output = quitProgram(state, True)
+            if output == -2:
                 break
             state.menu.pickChoice(0)
-
+            state.logs.write("backup/Temp_Logs.xml") 
         #Draw the menu.
         graphics.drawMainMenu(state.menu)
-
         #Select the option inputted by the user.
         UI = userInput()
         if isinstance(UI,int) and UI > 0:
             state.menu.pickChoice(UI)
-
+            
 
 def selectAddEntryLeaf(state):
     while not isinstance(state.currentL, main.Leaf):
@@ -264,107 +138,249 @@ def selectAddEntryLeaf(state):
 
 
 def addEntry(state, log=None):
-    partialEntry = {}
-
-    if not log:
-        # Pick a leaf onto which an entry can be added
-        if not selectAddEntryLeaf(state):
+    while True:
+        if not log:
+            # Pick a leaf onto which an entry can be added
+            if not selectAddEntryLeaf(state):
+                return 0
+            log = state.currentL
+        output = addEntry_dataLoop(log)
+        if output == -1:
+            return -1
+        elif output == 0:
             return 0
-        log = state.currentL
+        elif output == 1:
+            log = None
+            state.currentL = None
+        else:
+            main.complain("Shouldn't be able to get here")
+
+def addEntry_dataLoop(log):
     fields = log.fields()
     fieldsTable = graphics.TableOfFields(log, graphics.WINDOW_WIDTH)
+    partialEntry = {}
+    index = 0
+    count = 0
+    while True:
+        # if partial = none
+        if (index ==0 and not partialEntry):
+            output = addEntry_dataLoop_intro(log,fields,fieldsTable)
+            if isinstance(output, int):
+                return output
+        # enter data
+        field = fields[index]
+        partialEntry = addEntry_augmentPartialEntry(partialEntry, field, index, log)
+        index += 1
+        # break screen
+        index, partialEntry, command =  addEntry_dataLoop_break(index, partialEntry, log,fields)
+        if isinstance(command, int):
+            return command
+        count += 1
+        if count == 100:
+            count = 0
+            state.logs.write("backup/Temp_Logs.xml")
 
-    titleStr = "Adding entries to %s" % (log.key(),)
+
+def addEntry_dataLoop_intro(log,fields,fieldsTable):
+    #intro screen draw
+    titleStr = "Adding entries to %s - start new entry?" % (log.key(),)
     title = [graphics.cutTo(titleStr)]
-
-    instStr = "To start adding an entry, press enter leaving the input blank. " + \
-              "Alternatively enter 'Done' to stop adding entries or 'Quit' to save and quit the Logger."
+    instStr = "To start adding an entry, press enter leaving the input blank. Starting with %s." + \
+              "Alternatively enter, 'Back' to go back to leaf selection, 'Done' to stop adding " + \
+              "entries or 'Quit' to save and quit the Logger."
+    instStr = instStr %(fields[0].key(),)
     inst = graphics.splitToWidth(instStr)
-
+    
     spare = graphics.WINDOW_HEIGHT - 6 - len(inst)
     maxLenFieldsTable = min(spare * 2 / 3, len(fieldsTable))
     maxLenDataTable = spare - maxLenFieldsTable
 
-    dataTable = graphics.drawRecentData(leaf=log, maxHeight=maxLenDataTable, unfinishedEntry=partialEntry)
+    dataTable = graphics.drawRecentData(leaf=log, maxHeight=maxLenDataTable)
     content = fieldsTable[:maxLenFieldsTable] + [graphics.WINDOW_WIDTH * "-",] + dataTable
 
+    #input loop
     UI = False
-    while UI is not None:
+    while True:
         graphics.drawWindow(title, content, inst, ["$ ",])
         UI = userInput()
         if isinstance(UI, str):
             if match(UI,"done"):
+                #quit to menu
                 return 0
+            elif match(UI,"back"):
+                #back to leaf selection
+                return 1
             elif match(UI,"quit"):
-                return quitProgram(state)
+                #quit the logger
+                return -1
+        elif UI == None:
+            return None
 
-    # Permission to proceed! Enter main loop: selecting a field to set and then setting it.
-    index = 0
-    field = fields[index]
+def addEntry_dataLoop_break(index, partialEntry, log,fields):
+    # draw break screen
+    titleStr = "Break screen - adding new entry to %s" % (log.key(),)
+    title = [graphics.cutTo(titleStr),]
 
-    titleStr = "Adding new entry to %s" % (log.key(),)
-    title = [graphics.cutTo(titleStr)]
+    navOptions = addEntry_assessOptions(fields, index, partialEntry)
+    mayGoBack, selectLimit, mayComplete = navOptions
+    insts = addEntry_genInsts(index, fields, mayGoBack, -1, mayComplete)
 
+    width = graphics.WINDOW_WIDTH
+    blankLine =  [(width*" "),]
+    breakLine =  [(width*"-"),]
+
+    
+    if  index < len(fields) or not mayComplete:
+        miniPrev = graphics.miniDrawField(fields[index-1], log,partialEntry,"previous")
+        miniNext = graphics.miniDrawField(fields[index%len(fields)], log,partialEntry,"next")
+
+        breakScreen =   title + \
+                        breakLine + 2*blankLine + \
+                        [graphics.cutTo("Previous Field"),] + \
+                        breakLine + miniPrev + \
+                        breakLine + 2*blankLine + \
+                        [graphics.cutTo("Next Field"),] + \
+                        breakLine + miniNext + \
+                        breakLine
+    else:
+        miniPrev = graphics.miniDrawField(fields[index-1], log,partialEntry,"previous")
+        dataTable = graphics.drawRecentData(leaf=log, priorityCol = index-1,unfinishedEntry = partialEntry, maxHeight=2)
+
+        breakScreen =   title + \
+                        breakLine + 2*blankLine + \
+                        [graphics.cutTo("Completed entry"),] + \
+                        breakLine + dataTable + \
+                        breakLine + 2*blankLine + \
+                        [graphics.cutTo("Previous Field"),] + \
+                        breakLine + miniPrev + \
+                        breakLine
+
+
+
+    spare = graphics.WINDOW_HEIGHT - len(breakScreen) - len(insts) - 2
+
+    breakScreen =   breakScreen + \
+                    spare*blankLine + \
+                    insts + breakLine
+
+# if at i = i-max and all non-optional complete then "" for done and "loop" to loop round and set i = 0
+
+    #input loop
+    UI = False
     while True:
-        
-        
-
-        
-        # What are we allowed to do here?
-        navOptions = navigateOptions(fields, index, partialEntry)
-        mayGoBack, selectLimit, mayComplete = navOptions
-
-        inst =  addEntryInstrs(index, fields, mayGoBack, selectLimit, mayComplete)
-
-        spare = graphics.WINDOW_HEIGHT - 6 - len(inst)
-        maxLenFieldsTable = min(spare * 2 / 3, len(fieldsTable))
-        maxLenDataTable = spare - maxLenFieldsTable
-
-        dataTable = graphics.drawRecentData(leaf=log, maxHeight=maxLenDataTable, priorityCol=index, unfinishedEntry=partialEntry)
-        offset = max(index-maxLenDataTable, 0)
-        content = fieldsTable[offset:maxLenFieldsTable+offset] + [graphics.WINDOW_WIDTH * "-",] + dataTable
-
-        command = parseAddEntryCommand(index, partialEntry, navOptions, title, content, inst)
-        if isinstance(command, str):
-            if match(command, "cancel"):
-                return
-            elif match(command, "done"):
-                log.entry(partialEntry)
-                # Add another one, probably
-                return addEntry(state, log)
+        for line in breakScreen:
+            print line
+        print "$ ",
+        UI = userInput()
+        if isinstance(UI, str):
+            if match(UI,"option"):
+                #not yet programmed
+                index,partialEntry,breakScreen = addEntry_dataLoop_option(index, partialEntry, log,fields, breakScreen)
+            if match(UI,"quit"):
+                #quit the logger (possibly saving the entry first)
+                quitStr = "Are you sure you want to quit?"
+                if not mayComplete:
+                    quitStr = quitStr + " Doing so means throwing away this partially completed log entry."
+                if yesOrNo("Are you sure you want to quit?"):
+                    if mayComplete:
+                        if yesOrNo("Save entry before quiting?"):
+                            addEntry_saveEntry(fields, log, partialEntry)
+                    return 0, {}, -1
+            elif match(UI,"cancel"):
+                #cancel the entry and go back to main menu
+                cancelStr = "Are you sure you want to throw away this partially completed log entry and return to the menu?"
+                if yesOrNo(cancelStr):
+                    return 0, {}, 0
+            elif match(UI,"restart"):
+                #delete the entry and go to intro screen
+                restartStr = "Are you sure you want to throw away this partially completed entry and start again?"
+                if yesOrNo(restartStr):
+                    return 0, {}, None
+            elif match(UI,"done") and mayComplete:
+                #save entry, go to intro screen
+                addEntry_saveEntry(fields, log, partialEntry)
+                return 0, {}, None
+            elif match(UI,"back"):
+                #re-enter last field
+                return index-1, partialEntry, None
+            elif match(UI,"back") and (index  == len(fields) and mayComplete):
+                #re-enter last field
+                return 0, partialEntry, None
+        elif UI == None:
+            if index < len(fields):
+                #enter next field 
+                return index, partialEntry, None
+            elif mayComplete:
+                #save entry, go to intro screen
+                addEntry_saveEntry(fields, log, partialEntry)
+                return 0, {}, None
             else:
-                complain("Unexpected: %s" % (command,))
-        else:
-            index, partialEntry = command
-            field = fields[index]
-            if main.validDatatype(field.datatype, field.typeArgs):
-                partialEntry = augmentPartialEntry(partialEntry, field, index, log)
-                index = index + 1
-                if index >= len(fields):
-                    index = 0
-            else:
-                # NDL 2013-10-11 -- I can't help asking how this could happen. Didn't we check this stuff already?
-                # MGL 2013-10-26 -- Early stages, I don't massively trust any data-checking we've done so far. 
-                editField_drawAndUI("!!! ERROR setting default value for field '%s', invalid datatype." % (field.key(),),
-                                    "!!! Either the datatype or the associated type args are not valid. You cannot set a default until this has been fixed.",
-                                    graphics.drawField(field))
-
+                #loop around to first field
+                return 0, partialEntry, None
+            
+def addEntry_saveEntry(fields, log, partialEntry):
+    for field in fields:
+        if (field.key() not in partialEntry) and field.default:
+            partialEntry[field.key()] = field.default
+    
+    log.entry(partialEntry)
+    
+def addEntry_dataLoop_option(index, partialEntry, log,fields, breakScreen):
+    optionsScreen = \
+       ["Example Options Screen - Not yet dynamicallyt programmed                        ",
+        "--------------------------------------------------------------------------------",
+        "|##|H|Key               |Type      |*|Default    |Help                         |",
+        "|03| |Acidity           |Range 0-10|*|           |0 for no acidity, 1 for just |",
+        "|04| |Volume - in cm^3  |Float     |*|           |Make a guess...              |",
+        "|05| |Time on loo - in m|Int       |*|           |From sit down to stand up.   |",
+        "|06| |Time of visit     |Time Min  |*|           |Stand up time.               |",
+        "|07| |Comments          |String    | |No comments|Any relavent info not caught |",
+        "--------------------------------------------------------------------------------",
+        "...idity|Digestion|Acidity|Volume - i|Time on lo|Time of visit      |Comments  |",
+        "...     |?        |?      |?         |?         |?                  |?         |",
+        "...     |9        |0      |200       |15        |2013-10-21 08:50:00|?         |",
+        "...     |4        |0      |150       |10        |2013-10-22 09:05:00|Very dark |",
+        "...     |10       |0      |150       |20        |?                  |?         |",
+        "--------------------------------------------------------------------------------",
+        "                                                                                ",
+        "                                                                                ",
+        "Not Yet Programmed. To select a field to enter type 'select' followed by the    ",
+        "field number or followed by the beginning of the field key (i.e. 'select com'). ",
+        "To change the focus of the tables, use 'focus' instead of 'select'. Type 'cont' ",
+        "to continue, 'Restart' to start again, 'Cancel' to cancel this entry or 'Quit'  ",
+        "to quit. Not yet programmed, type anything to continue.                         ",
+        "--------------------------------------------------------------------------------"]
+    for line in optionsScreen:
+        print line
+    print " $",
+    UI = userInput()
+    return index,partialEntry,breakScreen
 
 def addEntry_goToOptions(index, fields, title):
     fieldKey = fields[index].key()
-
-    content =  graphics.splitToWidth("To set '%s' for this entry, press enter leaving the input blank. To see alternate options enter 'Option'."
-
     
+    content =  graphics.splitToWidth("To set '%s' for this entry, press enter leaving the input blank. To see alternate options enter 'Options'." % fieldKey)
+    inst = ["",]*(18-len(content))
+    graphics.drawWindow(title, content, inst, ["$ ",])
+    while True:
+        UI = userInput()
+        if UI is None:
+            return False
+        elif isinstance(UI, str):
+            if match(UI, "options"):
+                return True
+            
+    
+   
     
 
-def navigateOptions (fields, index, partialEntry):
+def addEntry_assessOptions (fields, index, partialEntry):
     # mayGoBack enables Back and Restart
     mayGoBack = (index >= 1)
     # How far may we navigate? The rule is: if field[N] is either set
     # or optional, we can go at least to N+1.
     i = 0
-    max = len(fields)s
+    max = len(fields)
     while i < max:
         field = fields[i]
         if field.optional or field.key() in partialEntry:
@@ -377,62 +393,42 @@ def navigateOptions (fields, index, partialEntry):
     # mayComplete is True if every field is either set or optional.
     mayComplete = (i == max)
     #
+    completed = mayComplete and (index == max-1)
     return (mayGoBack, selectLimit, mayComplete)
 
 
-def addEntryInstrs(index, fields, mayGoBack, selectLimit, mayComplete):
-    thisField = fields[index]
-    thisInstr = "To set '%s' for this entry, press enter leaving the input blank." % (thisField.key(),)
-
-    backInstr = ["'Back' to reset '%s'" % (fields[index-1].key(),)] if mayGoBack else []
-    selectInstr = ["'Select' followed by a number below %d to reset a specific field" % (selectLimit+1,)] if selectLimit>0 else []
-    restartInstr = ["'Restart' to start again"] if mayGoBack else []
-    cancelInstr = ["'Cancel' to give up"]
-    doneInstr = ["'Done' to save this entry"] if mayComplete else []
-    optionalInstrs = backInstr + selectInstr + restartInstr + cancelInstr + doneInstr
-    instrCount = len(optionalInstrs)
-    if instrCount>1:
-        optionalInstrs[instrCount-1] = "or " + optionalInstrs[instrCount-1]
-        optionalInstrs = ", ".join(optionalInstrs)
+def addEntry_genInsts(index, fields, mayGoBack, selectLimit, mayComplete):
+# if at i = i-max and all non-optional complete then "" for done and "loop" to loop round and set i = 0
+    if index < len(fields) or not mayComplete:
+        thisField = fields[index%len(fields)]
+        thisInst = "To set '%s' for this entry, press enter leaving the input blank." % (thisField.key(),)
+        doneInst = ["'Done' to save this entry"] if mayComplete else []
+        loopInst = []
     else:
-        optionalInstrs = optionalInstrs[0]
-    return graphics.splitToWidth(thisInstr + " Alternatively enter " + optionalInstrs + ".")
+        thisInst = "This entry has been finished, press enter leaving the input blank to save it and start a new entry."
+        doneInst = []
+        loopInst = ["'Loop' to go back to the first field and continue editing this entry"]
+        
+    backInst = ["'Back' to reset '%s'" % (fields[index-1].key(),)] if mayGoBack else []
+    selectInst = ["'Select' followed by a number below %d to reset a specific field" % (selectLimit+1,)] if selectLimit>0 else []
+    restartInst = ["'Restart' to start again"] if mayGoBack else []
+    optionInst = ["'Options' to see more options"]
+    cancelInst = ["'Cancel' to give up"]
+    quitInst = ["'Quit' to quit "]
+    optionalInsts = loopInst + backInst + selectInst + restartInst + optionInst + cancelInst + doneInst + quitInst
+    instCount = len(optionalInsts)
+    if instCount>1:
+        optionalInsts[instCount-1] = "or " + optionalInsts[instCount-1]
+        optionalInsts = ", ".join(optionalInsts)
+    else:
+        optionalInsts = optionalInsts[0]
+    return graphics.splitToWidth(thisInst + " Alternatively enter " + optionalInsts + ".")
 
-def parseAddEntryCommand(index, partialEntry, navOptions, title, content, inst):
-    mayGoBack, selectLimit, mayComplete = navOptions
-    while True:
-        graphics.drawWindow(title, content, inst, ["$ ",])
-        UI = userInput()
-        if UI is None:
-            break
-        elif isinstance(UI, str):
-            if mayGoBack and match(UI, "back"):
-                index = index - 1
-                break
-            elif mayGoBack and match(UI, "restart"):
-                if yesOrNo("Confirm: would you like to start this entry again?"):
-                    partialEntry = {}
-                    index = 0
-                    break
-            elif match(UI, "cancel"):
-                if yesOrNo("Confirm: would you like to abandon this new entry?"):
-                    return "cancel"
-            elif mayComplete and match(UI, "done"):
-                return "done"
-            elif selectLimit>0:
-                splut = UI.split()
-                if len(splut) == 2 and match(splut[0], "select"):
-                    try:
-                        where = int(splut[1])
-                        if where <= selectLimit:
-                            index = where
-                            break
-                    except:
-                        pass
+
     return (index, partialEntry)
 
 
-def augmentPartialEntry(partialEntry, field, index, log):
+def addEntry_augmentPartialEntry(partialEntry, field, index, log):
     "Returns (augmented) partialEntry"
     default = field.default
     key = field.key()
@@ -465,24 +461,41 @@ def augmentPartialEntry(partialEntry, field, index, log):
             instStr = instStr + " Alternatively, press enter leaving the input blank to reuse the current value."
         elif field.optional:
             instStr = instStr + " Alternatively, press enter leaving the input blank to use the default value."
-
+ 
         if datatype == "Choice":
             optionStrs = []
             for i in range(len(choiceOptions)):
                 optionStrs += ["%d. %s" % (i+1, choiceOptions[i][0])]
             instStr = instStr + " " + ", ".join(optionStrs) + ". " + helpStr
         else:
-            instStr = instStr + " " + helpStr
+            instStr = instStr
 
         title = [graphics.cutTo(titleStr),]
-        inst = graphics.splitToWidth(instStr)
-        spare = graphics.WINDOW_HEIGHT - 6 - len(inst)
-        maxLenFieldsTable = spare * 2 / 3
-        maxLenDataTable = spare - maxLenFieldsTable
+        dataTable = graphics.drawRecentData(leaf=log ,maxHeight=5, priorityCol=index, unfinishedEntry=partialEntry)
+        miniCurr = graphics.miniDrawField(field, log, partialEntry, "current")
 
-        fieldsTable = graphics.TableOfFields(log, graphics.WINDOW_WIDTH)
-        dataTable = graphics.drawRecentData(leaf=log ,maxHeight=maxLenDataTable, priorityCol=index, unfinishedEntry=partialEntry)
-        graphics.drawWindow(title, fieldsTable[:maxLenFieldsTable] + [graphics.WINDOW_WIDTH * "-"] + dataTable, inst, ["$ "])
+        instructions = graphics.splitToWidth(instStr)
+        fieldHelp = graphics.splitToWidth(helpStr)
+
+        width = graphics.WINDOW_WIDTH
+        blankLine =  [(width*" "),]
+        breakLine =  [(width*"-"),]
+
+        topHalf = title + breakLine + \
+                  dataTable + breakLine + \
+                  miniCurr + breakLine + \
+                  fieldHelp
+        
+        bottomHalf = breakLine + instructions + \
+                     breakLine
+        
+        window = topHalf + \
+                 (24 - len(topHalf) - len(bottomHalf))* blankLine + \
+                 bottomHalf
+        for line in window:
+            print line
+        print "$ ",
+        
         UI = userInput()
 
         if datatype == "Time":
@@ -505,9 +518,13 @@ def augmentPartialEntry(partialEntry, field, index, log):
                     choiceOptions = what
         else:
             value = UI
-        print "value", value
-        if (value is None and field.optional) or main.validFieldEntry(value, datatype, typeArgs):
+
+
+        if main.validFieldEntry(value, datatype, typeArgs):
             partialEntry[field.key()] = value
+            return partialEntry
+        elif value is None and field.optional:
+            partialEntry[field.key()] = field.default
             return partialEntry
 
 
@@ -1138,14 +1155,14 @@ def viewData(state):
     userInput()
     return 0
 
-def quitProgram(state):
-    if yesOrNo("Are you sure you want to quit?"):
+def quitProgram(state, alreadySure = False):
+    if alreadySure or  yesOrNo("Are you sure you want to quit?"):
         state.logs.write("Logs.xml")
         nowStr = str(main.now().previous(days = 0))
         backUpStr = "backup/Logs_" + nowStr[:10]
         print backUpStr
         state.logs.write(backUpStr)
-        return -1
+        return -2
     else:
         return 0
 
@@ -1565,40 +1582,134 @@ mainMenu(state)
 
 
 
+"""
+Things that need doing before alpha:
+
+save - need to have back-ups writes of most recent save of each day
+
+Things that need doing at some point:
+
+- Lists longer than one screen height need to be handled in some fashion.
+  Probably with navigation between sets of around ten.
+- Very long strings also need some kind of navigation to be viewed properly.
+- Print out two lines of "-" after every UI entered and before each new screen.
+  (To make it easier to seperate debug info from UI)
 
 
+
+This module:
+* Keeps track of program state
+* Interprets user inputs, sending some through main.py
+* Sends the state to graphicalOut.py to update the UI
+
+
+The state needs to know what menu-node is currently active, as well the user's
+location within the program.
+
+
+- read in current data
+- offer user options
+
+> Add new log entry
+>> Choose between logs until hit leaf
+>>> Enter data for new entry
+> Add/edit logs
+>> Add log
+>>> Flick through branches until decide where to add leaf
+>>>> Fill in fieds for new log
+>> Edit log
+>>> Pick log to edit
+>>>> Edit location of log in data structure
+>>>> Edit fields for log
+> View log data
+>> Pick log
+
+
+Menu options stored as nodes, their functions must all be able to run with only State as input.
+
+When an option is selected, if it is a leaf then something along the lines of:
+"runMenuOption(currentNode, state)"
+is run.
+
+* Build in menu navigation with a runMenuOption simply printing the selected leags' location.
+
+
+%%VIEW MODES%%
+!!
+_____________________________
+Title bar
+----------------------------
+!Content!
+
+
+
+
+
+!Content!
+-----------------------------
+Instruction bar
+-----------------------------
+User input bar
+
+_____________________________
+!!
+
+Examples:
+
+Title bar: "Menu selction: ~/'Add or edit log templates'/..."
+Content: List of options (add logs, edit logs, back)
+Instruction bar: "Select menu option from above."
+User input: "1"
+
+Title bar: "Adding entries to Health/'Toilet Visit'"
+Content: Table of previous entries.
+Instruction bar: "Rate consistency on a scale of 0 to 10, 'H' for help with this datum, 'B' to go back to previous datum or 'Q' to quit entry"
+User input: "4.5"
+
+Title bar: "Editting log template - Health/Sleep"
+Content: Table of datums, complete with defaults and ranges etc. Followed by list of options/instructions for next part of next datum
+Instruction bar: "Choose a data type from the list for 'Asleep by'"
+User input: "4"
+
+
+
+
+def addEntry_parseCommand(index, partialEntry, navOptions, title, content, inst):
+    mayGoBack, selectLimit, mayComplete = navOptions
+    while True:
+        graphics.drawWindow(title, content, inst, ["$ ",])
+        UI = userInput()
+        if UI is None:
+            break
+        elif isinstance(UI, str):
+            if mayGoBack and match(UI, "back"):
+                index = index - 1
+                break
+            elif mayGoBack and match(UI, "restart"):
+                if yesOrNo("Confirm: would you like to start this entry again?"):
+                    partialEntry = {}
+                    index = 0
+                    break
+            elif match(UI, "cancel"):
+                if yesOrNo("Confirm: would you like to abandon this new entry?"):
+                    return "cancel"
+            elif mayComplete and match(UI, "done"):
+                return "done"
+            elif selectLimit>0:
+                splut = UI.split()
+                if len(splut) == 2 and match(splut[0], "select"):
+                    try:
+                        where = int(splut[1])
+                        if where <= selectLimit:
+                            index = where
+                            break
+                    except:
+                        pass
 
 
 
 """
 
-globalButtons = {}
-
-current = selectLeaf(menu)
-print "User selected:", current
 
 
-
-while True:
-    graphics.draw(state)
-    try:
-        userIn = input()
-    except:
-        userIn = None
-    state = findNewState(state,userIn)
-    if isinstance(state.currentM,main.Leaf) and isinstance(state.currentL,main.Leaf):
-        break
-
-
-        datatypeList = json.loads(field.datatype)
-        current = {'key': field.key(),
-                   'datatype': datatypeList[0],
-                   'typeData': datatypeList[1],
-                   'hidden': field.hidden,
-                   'optional': field.optional,
-                   'default': field.default,
-                   'helpStr': field.help}
-
-
-"""
-
+ 
